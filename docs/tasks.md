@@ -1,6 +1,21 @@
 # Tasks
 
-## v1.1.1 — polish (this build)
+## Next — GitHub → Chrome Web Store publish
+
+- [ ] Add `CWS_EXTENSION_ID`, `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`,
+      `CWS_REFRESH_TOKEN` repository secrets (see `docs/store-listing.md`)
+- [x] Workflow `.github/workflows/publish-chrome.yml` (manual + `v*` tags)
+- [ ] First automated upload of 1.1.2 (or cancel pending 1.1.1, then run
+      Actions → Publish Chrome Web Store)
+
+## v1.1.2 — title capture
+
+- [x] Prefer real titles over brand stubs; strip `(N)` / `- YouTube` noise
+- [x] Upgrade weak titles / empty thumbnails on re-save
+- [x] Live YouTube verification + unit tests
+- [x] Merged to `main`
+
+## v1.1.1 — polish
 
 - [x] JSON import preserves notes, resume position/duration, and export order
       via `QueueStorage.importItems()`

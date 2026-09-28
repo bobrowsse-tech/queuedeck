@@ -60,9 +60,23 @@ Chrome profile the first time the extension reads or writes to it.
 
 ## Packaging for distribution
 
-`chrome://extensions` → "Pack extension" (or `chrome.exe
---pack-extension` from the CLI) produces a `.crx` + private key from this
-folder directly. For Chrome Web Store submission, zip the folder contents
-(not the folder itself) excluding `docs/`, `test/`, `README.md`,
-`LICENSE.txt`, `CONTRIBUTING.md`, `.github/`, and `make_icons.py` if
-present — none of those are needed at runtime.
+Use the repo helper (preferred):
+
+```
+./scripts/package.sh
+```
+
+That writes `QueueDeck-<manifest-version>.zip` with only the runtime files.
+
+`chrome://extensions` → "Pack extension" produces a `.crx` + private key for
+sideload testing; the Web Store wants the zip, not the crx.
+
+### Publishing via GitHub
+
+After you add the `CWS_*` Actions secrets (see `docs/store-listing.md`), either:
+
+- Actions → **Publish Chrome Web Store** → Run workflow, or
+- Push a matching version tag (`v1.2.0` when manifest is `1.2.0`)
+
+CI runs tests, builds the zip, and uploads it through the Chrome Web Store API.
+
