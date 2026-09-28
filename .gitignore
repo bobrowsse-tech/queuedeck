@@ -7,3 +7,11 @@ node_modules/
 .env
 .env.*
 *.log
+
+# OAuth / CWS credentials — never commit
+**/cws-oauth*.json
+**/cws-tokens*.json
+**/github-secrets*.txt
+**/access.token
+*client_secret*
+*refresh_token*

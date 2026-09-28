@@ -50,7 +50,7 @@ Create four repository secrets (`Settings → Secrets and variables → Actions`
 
 | Secret | Value |
 | --- | --- |
-| `CWS_EXTENSION_ID` | `pfbkjofaohbcfipdmkohcgpngbkfgjkk` |
+| `CWS_EXTENSION_ID` | From the item URL in the CWS dashboard (`…/devconsole/<publisher>/<id>/…`) — stays the same across version uploads |
 | `CWS_CLIENT_ID` | OAuth Desktop client ID |
 | `CWS_CLIENT_SECRET` | OAuth Desktop client secret |
 | `CWS_REFRESH_TOKEN` | Long-lived refresh token |
