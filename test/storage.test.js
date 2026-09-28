@@ -173,3 +173,57 @@ test("getItems backfills missing note/position fields", async function () {
   assert.equal(items[0].duration, 0);
   assert.equal(items[0].thumbnail, "");
 });
+
+test("pickBestTitle prefers real titles over YouTube brand stubs", function () {
+  var { QueueStorage } = loadQueueStorage();
+  assert.equal(
+    QueueStorage.pickBestTitle(["YouTube", "Real Talk - YouTube", "YouTube"], "YouTube"),
+    "Real Talk"
+  );
+  assert.equal(
+    QueueStorage.pickBestTitle(["youtube.com", "How to Brew", ""], "YouTube"),
+    "How to Brew"
+  );
+  assert.equal(
+    QueueStorage.pickBestTitle(["(12) Me at the zoo - YouTube", "Me at the zoo", "YouTube"], "YouTube"),
+    "Me at the zoo"
+  );
+  assert.equal(QueueStorage.stripSiteSuffix("(947) Me at the zoo - YouTube"), "Me at the zoo");
+  assert.equal(QueueStorage.isWeakTitle("YouTube", "YouTube"), true);
+  assert.equal(QueueStorage.isWeakTitle("How to Brew", "YouTube"), false);
+  assert.equal(QueueStorage.stripSiteSuffix("Clip - YouTube"), "Clip");
+});
+
+test("addItem upgrades a weak title and empty thumbnail on re-save", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.addItem({
+    url: "https://www.youtube.com/watch?v=abc123",
+    title: "YouTube",
+    siteName: "YouTube",
+    thumbnail: "",
+    position: 5,
+    duration: 100
+  });
+  var upgraded = await QueueStorage.addItem({
+    url: "https://www.youtube.com/watch?v=abc123",
+    title: "Deep Dive into Storage - YouTube",
+    siteName: "YouTube",
+    thumbnail: "https://i.ytimg.com/vi/abc123/hqdefault.jpg",
+    position: 5,
+    duration: 100
+  });
+  assert.equal(upgraded.alreadyExisted, true);
+  assert.equal(upgraded.item.title, "Deep Dive into Storage");
+  assert.equal(upgraded.item.thumbnail, "https://i.ytimg.com/vi/abc123/hqdefault.jpg");
+
+  // Strong titles must not be overwritten by a later weak capture.
+  var kept = await QueueStorage.addItem({
+    url: "https://www.youtube.com/watch?v=abc123",
+    title: "YouTube",
+    siteName: "YouTube",
+    position: 5,
+    duration: 100
+  });
+  assert.equal(kept.item.title, "Deep Dive into Storage");
+});

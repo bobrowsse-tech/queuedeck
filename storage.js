@@ -63,6 +63,53 @@ var QueueStorage = (function () {
     }
   }
 
+  // Brand-only / site-only titles are useless as playlist labels (esp. YouTube
+  // SPA loads where og:title or tab.title is still just "YouTube").
+  var WEAK_BRAND_TITLES = {
+    youtube: true,
+    vimeo: true,
+    dailymotion: true,
+    twitch: true,
+    netflix: true
+  };
+
+  function stripSiteSuffix(raw) {
+    if (!raw) return "";
+    return String(raw)
+      // YouTube puts unread notification counts in document.title: "(12) Title - YouTube"
+      .replace(/^\(\d+\)\s+/, "")
+      .replace(/\s+-\s+YouTube$/i, "")
+      .replace(/\s+\|\s+Vimeo$/i, "")
+      .trim();
+  }
+
+  function isWeakTitle(title, siteName) {
+    var t = stripSiteSuffix(title || "");
+    if (!t) return true;
+    var lower = t.toLowerCase();
+    if (WEAK_BRAND_TITLES[lower]) return true;
+    if (siteName && lower === String(siteName).trim().toLowerCase()) return true;
+    // Bare hostname as title (e.g. "youtube.com")
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(t)) return true;
+    return false;
+  }
+
+  // First non-weak candidate wins; otherwise first non-empty cleaned string.
+  function pickBestTitle(candidates, siteName) {
+    var list = Array.isArray(candidates) ? candidates : [];
+    var i;
+    var cleaned;
+    for (i = 0; i < list.length; i++) {
+      cleaned = stripSiteSuffix(list[i] || "");
+      if (cleaned && !isWeakTitle(cleaned, siteName)) return cleaned;
+    }
+    for (i = 0; i < list.length; i++) {
+      cleaned = stripSiteSuffix(list[i] || "");
+      if (cleaned) return cleaned;
+    }
+    return "Untitled";
+  }
+
   // Fill missing fields so older saved lists stay readable after schema adds.
   function normalizeItem(raw) {
     if (!raw || typeof raw !== "object") return null;
@@ -132,14 +179,37 @@ var QueueStorage = (function () {
       var existingIndex = items.findIndex(function (it) { return it.normalizedUrl === normalized; });
       if (existingIndex !== -1) {
         var existing = items[existingIndex];
+        var patch = {};
         var incomingPosition = partialItem.position || 0;
         // Re-saving an already-saved video (e.g. rewatching further in) can
         // still move the resume point forward, but never regresses it.
         if (incomingPosition > (existing.position || 0)) {
-          existing = Object.assign({}, existing, {
-            position: incomingPosition,
-            duration: partialItem.duration || existing.duration || 0
-          });
+          patch.position = incomingPosition;
+          patch.duration = partialItem.duration || existing.duration || 0;
+        }
+        // Upgrade brand-only titles (and empty thumbnails) when a later capture
+        // has a real video name — common after early Add/shortcut on YouTube.
+        var incomingTitle = stripSiteSuffix(partialItem.title || "");
+        var siteHint = partialItem.siteName || existing.siteName || "";
+        if (
+          incomingTitle &&
+          isWeakTitle(existing.title, existing.siteName) &&
+          !isWeakTitle(incomingTitle, siteHint)
+        ) {
+          patch.title = incomingTitle;
+        }
+        if (!existing.thumbnail && partialItem.thumbnail) {
+          patch.thumbnail = partialItem.thumbnail;
+        }
+        if (
+          partialItem.siteName &&
+          (!existing.siteName || /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(existing.siteName)) &&
+          partialItem.siteName !== existing.siteName
+        ) {
+          patch.siteName = partialItem.siteName;
+        }
+        if (Object.keys(patch).length) {
+          existing = Object.assign({}, existing, patch);
           items[existingIndex] = existing;
           return setItems(items).then(function () { return { item: existing, alreadyExisted: true }; });
         }
@@ -149,7 +219,7 @@ var QueueStorage = (function () {
         id: generateId(),
         url: partialItem.url,
         normalizedUrl: normalized,
-        title: partialItem.title || partialItem.url || "Untitled",
+        title: stripSiteSuffix(partialItem.title || "") || partialItem.url || "Untitled",
         siteName: partialItem.siteName || "",
         thumbnail: partialItem.thumbnail || "",
         note: typeof partialItem.note === "string" ? partialItem.note : "",
@@ -260,7 +330,10 @@ var QueueStorage = (function () {
     updateItem: updateItem,
     clearAll: clearAll,
     normalizeUrl: normalizeUrl,
-    hasUrl: hasUrl
+    hasUrl: hasUrl,
+    stripSiteSuffix: stripSiteSuffix,
+    isWeakTitle: isWeakTitle,
+    pickBestTitle: pickBestTitle
   };
 })();
 

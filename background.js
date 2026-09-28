@@ -54,7 +54,7 @@ function quickAddActiveTab() {
       }
       var meta = videoMeta || {
         url: tab.url,
-        title: tab.title || tab.url,
+        title: QueueStorage.pickBestTitle([tab.title], hostnameOf(tab.url)),
         thumbnail: "",
         siteName: hostnameOf(tab.url)
       };

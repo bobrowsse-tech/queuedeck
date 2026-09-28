@@ -224,7 +224,12 @@
 
       chrome.tabs.sendMessage(tab.id, { type: "GET_VIDEO_INFO" }, function (videoMeta) {
         if (chrome.runtime.lastError) return; // no content script on this page (e.g. chrome:// or store)
-        var meta = videoMeta || { url: tab.url, title: tab.title || tab.url, thumbnail: "", siteName: hostnameOf(tab.url) };
+        var meta = videoMeta || {
+          url: tab.url,
+          title: QueueStorage.pickBestTitle([tab.title], hostnameOf(tab.url)),
+          thumbnail: "",
+          siteName: hostnameOf(tab.url)
+        };
         currentTabMeta = meta;
 
         QueueStorage.hasUrl(meta.url).then(function (already) {

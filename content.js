@@ -135,22 +135,39 @@
     return el ? el.getAttribute("content") : "";
   }
 
-  function cleanTitle(raw) {
-    if (!raw) return document.title || location.hostname;
-    return raw.replace(/\s+-\s+YouTube$/i, "")
-      .replace(/\s+\|\s+Vimeo$/i, "")
-      .trim() || document.title;
+  function visiblePlayerTitle() {
+    var selectors = [
+      "h1.ytd-watch-metadata yt-formatted-string",
+      "h1.ytd-video-primary-info-renderer",
+      "#title h1 yt-formatted-string",
+      "h1.title",
+      ".ytp-title-link"
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      var text = el && (el.textContent || "").trim();
+      if (text) return text;
+    }
+    return "";
   }
 
   function getVideoMeta() {
     var ogTitle = metaContent('meta[property="og:title"]');
     var ogImage = metaContent('meta[property="og:image"]');
     var ogSite = metaContent('meta[property="og:site_name"]');
+    var siteName = ogSite || location.hostname.replace(/^www\./, "");
+    // Prefer visible player title, then document.title, then og:title.
+    // YouTube SPA nav often leaves og:title stuck on the brand; document.title
+    // may also carry a "(N)" notification prefix.
+    var title = QueueStorage.pickBestTitle(
+      [visiblePlayerTitle(), document.title, ogTitle],
+      siteName
+    );
     return {
       url: location.href,
-      title: cleanTitle(ogTitle || document.title),
+      title: title,
       thumbnail: ogImage || "",
-      siteName: ogSite || location.hostname.replace(/^www\./, ""),
+      siteName: siteName,
       position: trackedVideo ? trackedVideo.currentTime || 0 : 0,
       duration: trackedVideo ? trackedVideo.duration || 0 : 0
     };
