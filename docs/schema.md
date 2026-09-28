@@ -78,7 +78,11 @@ first use.
 
 The JSON file produced by "Export as JSON" (`options.js`) is simply
 `QueueItem[]` — the same shape as `queue_items`, serialized directly.
-Import accepts that shape (or a loosely-typed version of it: any object
-with at least a `url` is accepted, missing fields fall back to sane
-defaults) and merges it into the existing list using the same
-`normalizedUrl` de-duplication as `addItem()`.
+Import goes through `QueueStorage.importItems()`, which accepts that shape
+(or a loosely-typed version: any object with at least a `url` is accepted,
+missing fields fall back to sane defaults including `note`, `position`,
+and `duration`) and merges it into the existing list using the same
+`normalizedUrl` de-duplication as `addItem()`. Newly imported items keep
+the order they appear in the file and are prepended ahead of existing
+items.
+

@@ -49,13 +49,16 @@
     toastShownForUrl = null;
     dismissedForUrl = null;
     savedForUrl = null;
-    stopTicking();
+    detachVideo();
     removeToast();
   }
 
   function scanForVideo() {
     var videos = Array.prototype.slice.call(document.querySelectorAll("video"));
-    if (videos.length === 0) return;
+    if (videos.length === 0) {
+      detachVideo();
+      return;
+    }
     // Prefer the largest visible video on the page (main player over ads/thumbnails).
     var best = videos.reduce(function (a, b) {
       return rectArea(b) > rectArea(a) ? b : a;
@@ -70,7 +73,19 @@
     return Math.max(0, r.width) * Math.max(0, r.height);
   }
 
+  function detachVideo() {
+    if (trackedVideo) {
+      trackedVideo.removeEventListener("play", startTicking);
+      trackedVideo.removeEventListener("pause", stopTicking);
+      trackedVideo.removeEventListener("ended", stopTicking);
+    }
+    stopTicking();
+    trackedVideo = null;
+  }
+
   function attachVideo(video) {
+    if (trackedVideo === video) return;
+    detachVideo();
     trackedVideo = video;
     video.addEventListener("play", startTicking);
     video.addEventListener("pause", stopTicking);
@@ -120,22 +135,39 @@
     return el ? el.getAttribute("content") : "";
   }
 
-  function cleanTitle(raw) {
-    if (!raw) return document.title || location.hostname;
-    return raw.replace(/\s+-\s+YouTube$/i, "")
-      .replace(/\s+\|\s+Vimeo$/i, "")
-      .trim() || document.title;
+  function visiblePlayerTitle() {
+    var selectors = [
+      "h1.ytd-watch-metadata yt-formatted-string",
+      "h1.ytd-video-primary-info-renderer",
+      "#title h1 yt-formatted-string",
+      "h1.title",
+      ".ytp-title-link"
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      var text = el && (el.textContent || "").trim();
+      if (text) return text;
+    }
+    return "";
   }
 
   function getVideoMeta() {
     var ogTitle = metaContent('meta[property="og:title"]');
     var ogImage = metaContent('meta[property="og:image"]');
     var ogSite = metaContent('meta[property="og:site_name"]');
+    var siteName = ogSite || location.hostname.replace(/^www\./, "");
+    // Prefer visible player title, then document.title, then og:title.
+    // YouTube SPA nav often leaves og:title stuck on the brand; document.title
+    // may also carry a "(N)" notification prefix.
+    var title = QueueStorage.pickBestTitle(
+      [visiblePlayerTitle(), document.title, ogTitle],
+      siteName
+    );
     return {
       url: location.href,
-      title: cleanTitle(ogTitle || document.title),
+      title: title,
       thumbnail: ogImage || "",
-      siteName: ogSite || location.hostname.replace(/^www\./, ""),
+      siteName: siteName,
       position: trackedVideo ? trackedVideo.currentTime || 0 : 0,
       duration: trackedVideo ? trackedVideo.duration || 0 : 0
     };
@@ -179,7 +211,7 @@
     var wrap = document.createElement("div");
     wrap.className = "q-toast";
     wrap.setAttribute("role", "region");
-    wrap.setAttribute("aria-label", "Save video to Queue");
+    wrap.setAttribute("aria-label", "Save video to QueueDeck");
     wrap.innerHTML =
       '<div class="q-row q-head">' +
         '<span class="q-dot" aria-hidden="true"></span>' +
@@ -189,7 +221,7 @@
       '<p class="q-title"></p>' +
       '<p class="q-site"></p>' +
       '<div class="q-row q-actions">' +
-        '<button type="button" class="q-btn q-btn-primary" data-action="save">Save to Queue</button>' +
+        '<button type="button" class="q-btn q-btn-primary" data-action="save">Save video</button>' +
         '<button type="button" class="q-btn q-btn-ghost" data-action="dismiss">Not now</button>' +
       "</div>" +
       '<button type="button" class="q-settings-link" data-action="settings">Adjust or turn off this prompt</button>' +
@@ -206,7 +238,7 @@
       if (action === "save") {
         QueueStorage.addItem(meta).then(function () {
           savedForUrl = meta.url;
-          announce(wrap, "Saved to your Queue.");
+          announce(wrap, "Saved to QueueDeck.");
           collapseAfterDelay();
         });
       } else if (action === "dismiss") {

@@ -57,16 +57,15 @@ server."
 
 ## Definition of done, adapted for this repo
 
-There is no `tsc`, no bundler, and no test runner configured (see
-`docs/environment.md` for why that's a deliberate choice, not an
-oversight). Until/unless the project adopts one, "done" means:
+There is no bundler. Until/unless the project adopts one, "done" means:
 
 1. The change loads cleanly via `chrome://extensions` → Load unpacked,
    with no errors in the extension's service-worker console or the page
    console.
 2. Manually walk the acceptance criteria in `docs/features.md` that the
    change touches.
-3. No new permissions, no new network calls, no new dependencies (see
+3. `node --test test/*.test.js` passes (required on PRs via CI).
+4. No new permissions, no new network calls, no new dependencies (see
    Safety boundaries above).
-4. `docs/tasks.md` and, if the storage shape changed, `docs/schema.md`
+5. `docs/tasks.md` and, if the storage shape changed, `docs/schema.md`
    are updated in the same change.

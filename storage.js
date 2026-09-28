@@ -20,6 +20,10 @@ var QueueStorage = (function () {
     listFilter: "all" // "all" | "unwatched" | "watched"
   };
 
+  var VALID_THEMES = { system: true, light: true, dark: true };
+  var VALID_SORTS = { newest: true, oldest: true, site: true };
+  var VALID_FILTERS = { all: true, unwatched: true, watched: true };
+
   function promisify(fn, arg) {
     return new Promise(function (resolve, reject) {
       fn(arg, function (result) {
@@ -59,25 +63,113 @@ var QueueStorage = (function () {
     }
   }
 
+  // Brand-only / site-only titles are useless as playlist labels (esp. YouTube
+  // SPA loads where og:title or tab.title is still just "YouTube").
+  var WEAK_BRAND_TITLES = {
+    youtube: true,
+    vimeo: true,
+    dailymotion: true,
+    twitch: true,
+    netflix: true
+  };
+
+  function stripSiteSuffix(raw) {
+    if (!raw) return "";
+    return String(raw)
+      // YouTube puts unread notification counts in document.title: "(12) Title - YouTube"
+      .replace(/^\(\d+\)\s+/, "")
+      .replace(/\s+-\s+YouTube$/i, "")
+      .replace(/\s+\|\s+Vimeo$/i, "")
+      .trim();
+  }
+
+  function isWeakTitle(title, siteName) {
+    var t = stripSiteSuffix(title || "");
+    if (!t) return true;
+    var lower = t.toLowerCase();
+    if (WEAK_BRAND_TITLES[lower]) return true;
+    if (siteName && lower === String(siteName).trim().toLowerCase()) return true;
+    // Bare hostname as title (e.g. "youtube.com")
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(t)) return true;
+    return false;
+  }
+
+  // First non-weak candidate wins; otherwise first non-empty cleaned string.
+  function pickBestTitle(candidates, siteName) {
+    var list = Array.isArray(candidates) ? candidates : [];
+    var i;
+    var cleaned;
+    for (i = 0; i < list.length; i++) {
+      cleaned = stripSiteSuffix(list[i] || "");
+      if (cleaned && !isWeakTitle(cleaned, siteName)) return cleaned;
+    }
+    for (i = 0; i < list.length; i++) {
+      cleaned = stripSiteSuffix(list[i] || "");
+      if (cleaned) return cleaned;
+    }
+    return "Untitled";
+  }
+
+  // Fill missing fields so older saved lists stay readable after schema adds.
+  function normalizeItem(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    return {
+      id: raw.id || generateId(),
+      url: raw.url || "",
+      normalizedUrl: raw.normalizedUrl || normalizeUrl(raw.url || ""),
+      title: (raw.title || raw.url || "Untitled").trim(),
+      siteName: raw.siteName || "",
+      thumbnail: raw.thumbnail || "",
+      note: typeof raw.note === "string" ? raw.note : "",
+      position: Number(raw.position) || 0,
+      duration: Number(raw.duration) || 0,
+      addedAt: Number(raw.addedAt) || Date.now(),
+      watched: !!raw.watched
+    };
+  }
+
+  function clampDelay(seconds) {
+    var n = Math.round(Number(seconds));
+    if (!isFinite(n)) n = DEFAULT_SETTINGS.popupDelaySeconds;
+    return Math.min(180, Math.max(5, n));
+  }
+
+  function sanitizeSettings(partial) {
+    var next = Object.assign({}, DEFAULT_SETTINGS, partial || {});
+    next.popupEnabled = !!next.popupEnabled;
+    next.popupDelaySeconds = clampDelay(next.popupDelaySeconds);
+    if (!VALID_THEMES[next.theme]) next.theme = DEFAULT_SETTINGS.theme;
+    if (!VALID_SORTS[next.listSort]) next.listSort = DEFAULT_SETTINGS.listSort;
+    if (!VALID_FILTERS[next.listFilter]) next.listFilter = DEFAULT_SETTINGS.listFilter;
+    return next;
+  }
+
   function getSettings() {
     return get(KEYS.SETTINGS).then(function (res) {
-      return Object.assign({}, DEFAULT_SETTINGS, res[KEYS.SETTINGS] || {});
+      return sanitizeSettings(res[KEYS.SETTINGS] || {});
     });
   }
 
   function setSettings(partial) {
     return getSettings().then(function (current) {
-      var next = Object.assign({}, current, partial);
-      return set({ [KEYS.SETTINGS]: next }).then(function () { return next; });
+      var next = sanitizeSettings(Object.assign({}, current, partial));
+      var payload = {};
+      payload[KEYS.SETTINGS] = next;
+      return set(payload).then(function () { return next; });
     });
   }
 
   function getItems() {
-    return get(KEYS.ITEMS).then(function (res) { return res[KEYS.ITEMS] || []; });
+    return get(KEYS.ITEMS).then(function (res) {
+      var items = res[KEYS.ITEMS] || [];
+      return items.map(normalizeItem).filter(Boolean);
+    });
   }
 
   function setItems(items) {
-    return set({ [KEYS.ITEMS]: items });
+    var payload = {};
+    payload[KEYS.ITEMS] = items;
+    return set(payload);
   }
 
   // Returns { item, alreadyExisted }
@@ -87,34 +179,94 @@ var QueueStorage = (function () {
       var existingIndex = items.findIndex(function (it) { return it.normalizedUrl === normalized; });
       if (existingIndex !== -1) {
         var existing = items[existingIndex];
+        var patch = {};
         var incomingPosition = partialItem.position || 0;
         // Re-saving an already-saved video (e.g. rewatching further in) can
         // still move the resume point forward, but never regresses it.
         if (incomingPosition > (existing.position || 0)) {
-          existing = Object.assign({}, existing, {
-            position: incomingPosition,
-            duration: partialItem.duration || existing.duration || 0
-          });
+          patch.position = incomingPosition;
+          patch.duration = partialItem.duration || existing.duration || 0;
+        }
+        // Upgrade brand-only titles (and empty thumbnails) when a later capture
+        // has a real video name — common after early Add/shortcut on YouTube.
+        var incomingTitle = stripSiteSuffix(partialItem.title || "");
+        var siteHint = partialItem.siteName || existing.siteName || "";
+        if (
+          incomingTitle &&
+          isWeakTitle(existing.title, existing.siteName) &&
+          !isWeakTitle(incomingTitle, siteHint)
+        ) {
+          patch.title = incomingTitle;
+        }
+        if (!existing.thumbnail && partialItem.thumbnail) {
+          patch.thumbnail = partialItem.thumbnail;
+        }
+        if (
+          partialItem.siteName &&
+          (!existing.siteName || /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(existing.siteName)) &&
+          partialItem.siteName !== existing.siteName
+        ) {
+          patch.siteName = partialItem.siteName;
+        }
+        if (Object.keys(patch).length) {
+          existing = Object.assign({}, existing, patch);
           items[existingIndex] = existing;
           return setItems(items).then(function () { return { item: existing, alreadyExisted: true }; });
         }
         return { item: existing, alreadyExisted: true };
       }
-      var item = {
+      var item = normalizeItem({
         id: generateId(),
         url: partialItem.url,
         normalizedUrl: normalized,
-        title: (partialItem.title || partialItem.url || "Untitled").trim(),
+        title: stripSiteSuffix(partialItem.title || "") || partialItem.url || "Untitled",
         siteName: partialItem.siteName || "",
         thumbnail: partialItem.thumbnail || "",
-        note: "",
+        note: typeof partialItem.note === "string" ? partialItem.note : "",
         position: partialItem.position || 0,
         duration: partialItem.duration || 0,
         addedAt: Date.now(),
         watched: false
-      };
+      });
       items.unshift(item);
       return setItems(items).then(function () { return { item: item, alreadyExisted: false }; });
+    });
+  }
+
+  // Merge a JSON export into the current list. Skips duplicates by
+  // normalizedUrl; preserves file order of newly added items.
+  // Returns { added, total }.
+  function importItems(incoming) {
+    if (!Array.isArray(incoming)) {
+      return Promise.reject(new Error("not an array"));
+    }
+    return getItems().then(function (existing) {
+      var seen = {};
+      existing.forEach(function (it) { seen[it.normalizedUrl] = true; });
+      var toAdd = [];
+      incoming.forEach(function (raw) {
+        if (!raw || !raw.url) return;
+        var normalized = normalizeUrl(raw.url);
+        if (seen[normalized]) return;
+        seen[normalized] = true;
+        toAdd.push(normalizeItem({
+          id: generateId(),
+          url: raw.url,
+          normalizedUrl: normalized,
+          title: raw.title || raw.url,
+          siteName: raw.siteName || "",
+          thumbnail: raw.thumbnail || "",
+          note: raw.note,
+          position: raw.position,
+          duration: raw.duration,
+          addedAt: raw.addedAt || Date.now(),
+          watched: !!raw.watched
+        }));
+      });
+      var next = toAdd.concat(existing);
+      return setItems(next).then(function () {
+        return { added: toAdd.length, total: next.length };
+      });
     });
   }
 
@@ -147,7 +299,7 @@ var QueueStorage = (function () {
   function updateItem(id, patch) {
     return getItems().then(function (items) {
       var next = items.map(function (it) {
-        return it.id === id ? Object.assign({}, it, patch) : it;
+        return it.id === id ? normalizeItem(Object.assign({}, it, patch)) : it;
       });
       return setItems(next);
     });
@@ -172,12 +324,16 @@ var QueueStorage = (function () {
     getItems: getItems,
     setItems: setItems,
     addItem: addItem,
+    importItems: importItems,
     updatePositionByUrl: updatePositionByUrl,
     removeItem: removeItem,
     updateItem: updateItem,
     clearAll: clearAll,
     normalizeUrl: normalizeUrl,
-    hasUrl: hasUrl
+    hasUrl: hasUrl,
+    stripSiteSuffix: stripSiteSuffix,
+    isWeakTitle: isWeakTitle,
+    pickBestTitle: pickBestTitle
   };
 })();
 

@@ -1,4 +1,4 @@
-# Queue — Watch Later Playlist
+# QueueDeck
 
 A Chrome extension that saves video links so you can watch them later. No
 accounts, no servers, no analytics — everything lives in your browser's
@@ -6,13 +6,14 @@ local storage.
 
 ## What it does
 
-- **Passive save prompt.** While you're watching a video on any site, Queue
-  waits until you've been watching for a while (20 seconds by default, fully
-  adjustable) and then shows a small, dismissible prompt asking if you want
-  to save it. Say no once and it won't ask again for that video.
+- **Passive save prompt.** While you're watching a video on any site,
+  QueueDeck waits until you've been watching for a while (20 seconds by
+  default, fully adjustable) and then shows a small, dismissible prompt
+  asking if you want to save it. Say no once and it won't ask again for
+  that video.
 - **One-click save.** Click the toolbar icon any time — if the current tab
-  has a video, Queue shows an **Add** button at the top of the popup so you
-  can save it immediately, no waiting required.
+  has a video, QueueDeck shows an **Add** button at the top of the
+  popup so you can save it immediately, no waiting required.
 - **A real playlist.** Every saved video is listed with its thumbnail,
   title, source site, and when it was added. Click any entry to open it in
   a new tab. Mark videos watched, rename them, remove one, or clear
@@ -21,9 +22,9 @@ local storage.
   tab's video instantly, no popup required — the toolbar badge flashes to
   confirm. Customizable at `chrome://extensions/shortcuts`.
 - **Notes.** Attach a short note to any saved item, right from the list.
-- **Resume where you left off.** Queue tracks playback position for saved
-  videos (synced every ~10s while playing) and shows a progress bar and
-  "Resume at mm:ss" — with a real resume link on YouTube and Vimeo.
+- **Resume where you left off.** Playback position syncs every ~10s while
+  playing, with a progress bar and "Resume at mm:ss" — plus a real resume
+  link on YouTube and Vimeo.
 - **Sort & filter.** All / Unwatched / Watched, and Newest / Oldest / By
   site — both remembered between popup opens.
 - **Local-first.** Data is stored with `chrome.storage.local`, which
@@ -42,7 +43,7 @@ local storage.
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked** and select this folder.
-4. Pin the "Queue" icon to your toolbar.
+4. Pin the **QueueDeck** icon to your toolbar.
 
 ## Why these permissions
 
@@ -65,8 +66,13 @@ storage.js         Shared read/write layer over chrome.storage.local
 popup.html/.css/.js   Toolbar popup: the playlist itself
 options.html/.css/.js Settings page: delay, on/off, theme, export/import
 icons/            Toolbar icons (16/32/48/128)
+test/             Node test suite (`node --test test/*.test.js`)
 docs/             Project documentation (see docs/index.md)
 ```
+
+## Contributing
+
+PRs only — `main` is protected. See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## License
 

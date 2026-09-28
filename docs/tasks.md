@@ -1,6 +1,16 @@
 # Tasks
 
-## v1.1.0 — shipped in this build
+## v1.1.1 — polish (this build)
+
+- [x] JSON import preserves notes, resume position/duration, and export order
+      via `QueueStorage.importItems()`
+- [x] Settings sanitization (clamp delay 5–180, valid theme/sort/filter enums)
+- [x] Item shape normalization on read so older lists gain new fields safely
+- [x] Content-script video listener cleanup when the tracked `<video>` changes
+- [x] Safer http(s)-only thumbnail CSS assignment in the popup
+- [x] Automated Node test suite (`node --test test/*.test.js`) + GitHub Actions CI
+
+## v1.1.0 — shipped
 
 - [x] Keyboard shortcut (`commands` in manifest, `Ctrl+Shift+S` default) to
       quick-add the active tab's video without opening the popup, with a
@@ -35,10 +45,8 @@
       where practical, but this hasn't been tested against
       `browser.*`/`webextension-polyfill`. See `docs/architecture.md` for
       the specific changes a port would need.
-- [ ] Automated test coverage. None exists yet (see
-      `docs/environment.md` for the reasoning); a reasonable first step
-      would be a headless-Chrome Puppeteer smoke test that loads the
-      unpacked extension and exercises the popup.
+- [ ] Headless-Chrome / Puppeteer popup smoke test (unit coverage for
+      `QueueStorage` + manifest invariants is in place; browser UI smoke is next).
 
 ## Known constraints (by design, not bugs)
 

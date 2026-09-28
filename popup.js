@@ -143,10 +143,7 @@
         link.setAttribute("aria-label", item.title + (item.watched ? " (watched)" : ""));
 
         var thumb = node.querySelector(".item-thumb");
-        if (item.thumbnail) {
-          thumb.style.backgroundImage = "url('" + item.thumbnail.replace(/'/g, "%27") + "')";
-          thumb.classList.add("has-image");
-        }
+        setThumbBackground(thumb, item.thumbnail);
         if (item.duration > 0) {
           var pct = Math.min(100, Math.round(((item.position || 0) / item.duration) * 100));
           node.querySelector(".item-progress-fill").style.width = pct + "%";
@@ -227,15 +224,18 @@
 
       chrome.tabs.sendMessage(tab.id, { type: "GET_VIDEO_INFO" }, function (videoMeta) {
         if (chrome.runtime.lastError) return; // no content script on this page (e.g. chrome:// or store)
-        var meta = videoMeta || { url: tab.url, title: tab.title || tab.url, thumbnail: "", siteName: hostnameOf(tab.url) };
+        var meta = videoMeta || {
+          url: tab.url,
+          title: QueueStorage.pickBestTitle([tab.title], hostnameOf(tab.url)),
+          thumbnail: "",
+          siteName: hostnameOf(tab.url)
+        };
         currentTabMeta = meta;
 
         QueueStorage.hasUrl(meta.url).then(function (already) {
           if (already) return; // already saved — no need to prompt again
           quickAddTitle.textContent = meta.title;
-          if (meta.thumbnail) {
-            quickAddThumb.style.backgroundImage = "url('" + meta.thumbnail.replace(/'/g, "%27") + "')";
-          }
+          setThumbBackground(quickAddThumb, meta.thumbnail);
           quickAdd.hidden = false;
         });
       });
@@ -280,11 +280,23 @@
     try { return new URL(url).hostname.replace(/^www\./, ""); } catch (e) { return ""; }
   }
 
+  // Only absolute http(s) thumbnails; escape quotes so CSS url() can't break out.
+  // No base URL — relative paths must throw and be ignored, not resolve to a fake host.
+  function setThumbBackground(el, rawUrl) {
+    if (!el || !rawUrl) return;
+    try {
+      var u = new URL(rawUrl);
+      if (u.protocol !== "http:" && u.protocol !== "https:") return;
+      el.style.backgroundImage = 'url("' + u.href.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '")';
+      el.classList.add("has-image");
+    } catch (e) { /* ignore bad / relative thumbnail URLs */ }
+  }
+
   quickAddBtn.addEventListener("click", function () {
     if (!currentTabMeta) return;
     QueueStorage.addItem(currentTabMeta).then(function () {
       quickAdd.hidden = true;
-      announce("Added to Queue");
+      announce("Added to QueueDeck");
       render();
     });
   });

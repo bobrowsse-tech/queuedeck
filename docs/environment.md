@@ -3,8 +3,9 @@
 ## Requirements
 
 - Chrome or any Chromium-based browser with Manifest V3 support (Chrome
-  88+; recent stable strongly recommended). That's it — no Node, no
-  package manager, no build tool.
+  88+; recent stable strongly recommended). That's it for running the
+  extension — no Node, no package manager, no build tool.
+- Optional for contributors: Node 18+ to run the automated tests.
 
 ## Why no build step
 
@@ -39,6 +40,18 @@ adopted), that's a deliberate architectural change requiring sign-off per
    (it runs in that page's tab, isolated world).
 ```
 
+## Tests
+
+No npm install required. From the repo root:
+
+```
+node --test test/*.test.js
+```
+
+These cover `QueueStorage` behavior (de-dupe, import, settings clamp) and
+manifest / privacy invariants (no network calls, storage boundary). CI runs
+the same command on every PR via `.github/workflows/test.yml`.
+
 ## Ports / servers / env vars
 
 None. There is no local server, no `.env` file, and nothing to
@@ -50,5 +63,6 @@ Chrome profile the first time the extension reads or writes to it.
 `chrome://extensions` → "Pack extension" (or `chrome.exe
 --pack-extension` from the CLI) produces a `.crx` + private key from this
 folder directly. For Chrome Web Store submission, zip the folder contents
-(not the folder itself) excluding `docs/`, `README.md`, `LICENSE.txt`,
-and `make_icons.py` if present — none of those are needed at runtime.
+(not the folder itself) excluding `docs/`, `test/`, `README.md`,
+`LICENSE.txt`, `CONTRIBUTING.md`, `.github/`, and `make_icons.py` if
+present — none of those are needed at runtime.

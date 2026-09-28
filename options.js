@@ -87,34 +87,14 @@
     reader.onload = function () {
       try {
         var incoming = JSON.parse(String(reader.result));
-        if (!Array.isArray(incoming)) throw new Error("not an array");
-        QueueStorage.getItems().then(function (existing) {
-          var existingUrls = new Set(existing.map(function (it) { return it.normalizedUrl; }));
-          var added = 0;
-          incoming.forEach(function (raw) {
-            if (!raw || !raw.url) return;
-            var normalized = QueueStorage.normalizeUrl(raw.url);
-            if (existingUrls.has(normalized)) return;
-            existingUrls.add(normalized);
-            existing.unshift({
-              id: "q_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9),
-              url: raw.url,
-              normalizedUrl: normalized,
-              title: raw.title || raw.url,
-              siteName: raw.siteName || "",
-              thumbnail: raw.thumbnail || "",
-              addedAt: raw.addedAt || Date.now(),
-              watched: !!raw.watched
-            });
-            added++;
-          });
-          QueueStorage.setItems(existing).then(function () {
-            showStatus("Imported " + added + " new videos.");
-            load();
-          });
+        QueueStorage.importItems(incoming).then(function (result) {
+          showStatus("Imported " + result.added + " new videos.");
+          load();
+        }).catch(function () {
+          showStatus("That file doesn't look like a QueueDeck export.");
         });
       } catch (e) {
-        showStatus("That file doesn't look like a Queue export.");
+        showStatus("That file doesn't look like a QueueDeck export.");
       }
     };
     reader.readAsText(file);

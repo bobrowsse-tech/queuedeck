@@ -32,12 +32,12 @@ step. There is nothing to deploy — the artifact *is* the source.
 - **`storage.js`** is the only code that touches `chrome.storage.local`.
   Every other file goes through its `QueueStorage` API
   (`getItems`, `addItem`, `removeItem`, `updateItem`, `clearAll`,
-  `getSettings`, `setSettings`). This keeps the storage schema in one
-  place and makes it safe to change later without hunting through four
-  files. It is loaded as a plain (non-module) script in every context —
-  via `<script src="storage.js">` in the two HTML pages, via the
-  `content_scripts.js` array for the isolated content-script world, and
-  via `importScripts("storage.js")` in the service worker.
+  `importItems`, `getSettings`, `setSettings`). This keeps the storage
+  schema in one place and makes it safe to change later without hunting
+  through four files. It is loaded as a plain (non-module) script in
+  every context — via `<script src="storage.js">` in the two HTML pages,
+  via the `content_scripts.js` array for the isolated content-script
+  world, and via `importScripts("storage.js")` in the service worker.
 - **`content.js`** owns video detection and the in-page prompt. It never
   writes anything without a save action (its own **Save** button click)
   and never calls out to any other extension surface except a single
