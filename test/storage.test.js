@@ -224,6 +224,41 @@ test("pickFreshTitle waits out titles left behind by the previous video", functi
   );
 });
 
+test("staleTitleKeys is only the title from the page being left", function () {
+  var { QueueStorage } = loadQueueStorage();
+  assert.equal(
+    QueueStorage.staleTitleKeys("Calming White Flowers - YouTube").join("|"),
+    "calming white flowers"
+  );
+  assert.equal(QueueStorage.staleTitleKeys("").length, 0);
+  assert.equal(QueueStorage.staleTitleKeys("YouTube").length, 0);
+});
+
+test("pickFreshWatchTitle waits instead of using a lagged og:title", function () {
+  var { QueueStorage } = loadQueueStorage();
+  var stale = ["calming white flowers"];
+  assert.equal(
+    QueueStorage.pickFreshWatchTitle(
+      "Calming White Flowers",
+      "Calming White Flowers - YouTube",
+      "Elegant Blooming Flower",
+      "YouTube",
+      stale
+    ),
+    ""
+  );
+  assert.equal(
+    QueueStorage.pickFreshWatchTitle(
+      "White Floral Elegance",
+      "Calming White Flowers - YouTube",
+      "Elegant Blooming Flower",
+      "YouTube",
+      stale
+    ),
+    "White Floral Elegance"
+  );
+});
+
 test("addItem upgrades a weak title and empty thumbnail on re-save", async function () {
   var { QueueStorage, mock } = loadQueueStorage();
   mock.clear();

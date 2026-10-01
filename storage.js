@@ -134,6 +134,39 @@ var QueueStorage = (function () {
     return "";
   }
 
+  function titleKey(raw) {
+    return stripSiteSuffix(raw || "").toLowerCase();
+  }
+
+  // Only the title trusted on the page being left. A heading read when
+  // navigation starts may already belong to the next video, so callers
+  // must not mark every string they see at that moment.
+  function staleTitleKeys(committed) {
+    var committedKey = titleKey(committed);
+    if (!committedKey || isWeakTitle(committedKey, "")) return [];
+    return [committedKey];
+  }
+
+  function isRejectedTitle(raw, staleList) {
+    var key = titleKey(raw);
+    if (!key) return false;
+    var stale = Array.isArray(staleList) ? staleList : [];
+    var i;
+    for (i = 0; i < stale.length; i++) {
+      if (titleKey(stale[i]) === key) return true;
+    }
+    return false;
+  }
+
+  // Heading and tab title win. While either of them still names the page
+  // just left, a lagged og:title is not treated as the new video.
+  function pickFreshWatchTitle(heading, docTitle, ogTitle, siteName, staleList) {
+    var primary = pickFreshTitle([heading, docTitle], siteName, staleList);
+    if (primary) return primary;
+    if (isRejectedTitle(heading, staleList) || isRejectedTitle(docTitle, staleList)) return "";
+    return pickFreshTitle([ogTitle], siteName, staleList);
+  }
+
   // Fill missing fields so older saved lists stay readable after schema adds.
   function normalizeItem(raw) {
     if (!raw || typeof raw !== "object") return null;
@@ -358,7 +391,9 @@ var QueueStorage = (function () {
     stripSiteSuffix: stripSiteSuffix,
     isWeakTitle: isWeakTitle,
     pickBestTitle: pickBestTitle,
-    pickFreshTitle: pickFreshTitle
+    pickFreshTitle: pickFreshTitle,
+    staleTitleKeys: staleTitleKeys,
+    pickFreshWatchTitle: pickFreshWatchTitle
   };
 })();
 

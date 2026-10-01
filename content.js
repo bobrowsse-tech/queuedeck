@@ -19,11 +19,10 @@
   // card for a page the viewer has already left.
   var promptGeneration = 0;
   var promptInFlight = false;
-  // Last title we trusted for lastUrl, plus titles snapshotted when a
-  // YouTube navigation starts (the heading and og:title update later).
+  // Last title we trusted for lastUrl. staleTitles is replaced on each
+  // navigation with only that title.
   var committedTitle = "";
   var staleTitles = [];
-  var pendingStale = null;
 
   QueueStorage.getSettings().then(function (s) {
     settings = s;
@@ -42,21 +41,11 @@
     var mo = new MutationObserver(debounce(scanForVideo, 500));
     mo.observe(document.documentElement, { childList: true, subtree: true });
     setInterval(pollForNavigation, 1000);
-    document.addEventListener("yt-navigate-start", onNavigateStart);
     document.addEventListener("yt-navigate-finish", onNavigateFinish);
     window.addEventListener("popstate", onPopState);
   }
 
-  function onNavigateStart() {
-    // Grab titles now. YouTube changes the address and the player first;
-    // the heading, tab title, and og:title often still name the video
-    // being left, sometimes for many seconds.
-    pendingStale = currentTitleSamples();
-  }
-
   function onNavigateFinish() {
-    // Finish can run before location.href updates. Leave pendingStale in
-    // place so the tick that sees the new address still has the old titles.
     if (location.href !== lastUrl) noteNavigation();
   }
 
@@ -68,38 +57,12 @@
     if (location.href !== lastUrl) noteNavigation();
   }
 
-  function currentTitleSamples() {
-    return [committedTitle].concat(titleCandidates());
-  }
-
-  function markStale(raw) {
-    var cleaned = QueueStorage.stripSiteSuffix(raw || "");
-    if (!cleaned || QueueStorage.isWeakTitle(cleaned, "")) return;
-    var key = cleaned.toLowerCase();
-    if (staleTitles.indexOf(key) !== -1) return;
-    staleTitles.push(key);
-  }
-
   function noteNavigation() {
     if (location.href === lastUrl) return;
-    var samples = pendingStale;
-    pendingStale = null;
-    if (!samples) {
-      samples = [committedTitle, metaContent('meta[property="og:title"]')];
-      var visible = visiblePlayerTitle();
-      var docTitle = document.title;
-      if (!committedTitle) {
-        samples.push(visible, docTitle);
-      } else {
-        var committedKey = QueueStorage.stripSiteSuffix(committedTitle).toLowerCase();
-        [visible, docTitle].forEach(function (raw) {
-          var cleaned = QueueStorage.stripSiteSuffix(raw || "");
-          if (cleaned && cleaned.toLowerCase() === committedKey) samples.push(raw);
-        });
-      }
-    }
-    var i;
-    for (i = 0; i < samples.length; i++) markStale(samples[i]);
+    // Replace, don't append. Only the title trusted while the previous URL
+    // was current is stale. A heading read at navigate-start may already
+    // be the next video, so it is not copied into this list.
+    staleTitles = QueueStorage.staleTitleKeys(committedTitle);
     committedTitle = "";
     lastUrl = location.href;
     resetTracking();
@@ -251,7 +214,14 @@
   }
 
   function freshTitle() {
-    return QueueStorage.pickFreshTitle(titleCandidates(), siteNameOf(), staleTitles);
+    var candidates = titleCandidates();
+    return QueueStorage.pickFreshWatchTitle(
+      candidates[0],
+      candidates[1],
+      candidates[2],
+      siteNameOf(),
+      staleTitles
+    );
   }
 
   function rememberCommittedTitle() {
