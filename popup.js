@@ -224,6 +224,7 @@
 
       chrome.tabs.sendMessage(tab.id, { type: "GET_VIDEO_INFO" }, function (videoMeta) {
         if (chrome.runtime.lastError) return; // no content script on this page (e.g. chrome:// or store)
+        if (videoMeta && videoMeta.titleStale) return; // page title still names the previous video
         var meta = videoMeta || {
           url: tab.url,
           title: QueueStorage.pickBestTitle([tab.title], hostnameOf(tab.url)),
