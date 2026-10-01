@@ -52,6 +52,10 @@ function quickAddActiveTab() {
         flashBadge("!", "#E85D5D");
         return;
       }
+      if (videoMeta && videoMeta.titleStale) {
+        flashBadge("!", "#E85D5D");
+        return;
+      }
       var meta = videoMeta || {
         url: tab.url,
         title: QueueStorage.pickBestTitle([tab.title], hostnameOf(tab.url)),

@@ -9,12 +9,21 @@
   var watchedSeconds = 0;
   var tickCount = 0;
   var tickTimer = null;
-  var lastUrl = "";
+  var lastUrl = location.href;
   var toastShownForUrl = null;
   var dismissedForUrl = null;
   var savedForUrl = null;
   var hostEl = null;
   var shadow = null;
+  // Bumped on every navigation so an in-flight hasUrl reply cannot show a
+  // card for a page the viewer has already left.
+  var promptGeneration = 0;
+  var promptInFlight = false;
+  // Last title we trusted for lastUrl, plus titles snapshotted when a
+  // YouTube navigation starts (the heading and og:title update later).
+  var committedTitle = "";
+  var staleTitles = [];
+  var pendingStale = null;
 
   QueueStorage.getSettings().then(function (s) {
     settings = s;
@@ -28,22 +37,78 @@
   });
 
   function boot() {
-    lastUrl = location.href;
+    if (location.href !== lastUrl) noteNavigation();
     scanForVideo();
     var mo = new MutationObserver(debounce(scanForVideo, 500));
     mo.observe(document.documentElement, { childList: true, subtree: true });
     setInterval(pollForNavigation, 1000);
+    document.addEventListener("yt-navigate-start", onNavigateStart);
+    document.addEventListener("yt-navigate-finish", onNavigateFinish);
+    window.addEventListener("popstate", onPopState);
+  }
+
+  function onNavigateStart() {
+    // Grab titles now. YouTube changes the address and the player first;
+    // the heading, tab title, and og:title often still name the video
+    // being left, sometimes for many seconds.
+    pendingStale = currentTitleSamples();
+  }
+
+  function onNavigateFinish() {
+    // Finish can run before location.href updates. Leave pendingStale in
+    // place so the tick that sees the new address still has the old titles.
+    if (location.href !== lastUrl) noteNavigation();
+  }
+
+  function onPopState() {
+    if (location.href !== lastUrl) noteNavigation();
   }
 
   function pollForNavigation() {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      resetTracking();
-      scanForVideo();
+    if (location.href !== lastUrl) noteNavigation();
+  }
+
+  function currentTitleSamples() {
+    return [committedTitle].concat(titleCandidates());
+  }
+
+  function markStale(raw) {
+    var cleaned = QueueStorage.stripSiteSuffix(raw || "");
+    if (!cleaned || QueueStorage.isWeakTitle(cleaned, "")) return;
+    var key = cleaned.toLowerCase();
+    if (staleTitles.indexOf(key) !== -1) return;
+    staleTitles.push(key);
+  }
+
+  function noteNavigation() {
+    if (location.href === lastUrl) return;
+    var samples = pendingStale;
+    pendingStale = null;
+    if (!samples) {
+      samples = [committedTitle, metaContent('meta[property="og:title"]')];
+      var visible = visiblePlayerTitle();
+      var docTitle = document.title;
+      if (!committedTitle) {
+        samples.push(visible, docTitle);
+      } else {
+        var committedKey = QueueStorage.stripSiteSuffix(committedTitle).toLowerCase();
+        [visible, docTitle].forEach(function (raw) {
+          var cleaned = QueueStorage.stripSiteSuffix(raw || "");
+          if (cleaned && cleaned.toLowerCase() === committedKey) samples.push(raw);
+        });
+      }
     }
+    var i;
+    for (i = 0; i < samples.length; i++) markStale(samples[i]);
+    committedTitle = "";
+    lastUrl = location.href;
+    resetTracking();
+    scanForVideo();
   }
 
   function resetTracking() {
+    promptGeneration += 1;
+    promptInFlight = false;
     watchedSeconds = 0;
     tickCount = 0;
     toastShownForUrl = null;
@@ -96,8 +161,13 @@
   function startTicking() {
     if (tickTimer) return;
     tickTimer = setInterval(function () {
+      if (location.href !== lastUrl) {
+        noteNavigation();
+        return;
+      }
       watchedSeconds += 1;
       tickCount += 1;
+      rememberCommittedTitle();
       maybePrompt();
       if (tickCount % 10 === 0 && trackedVideo) {
         QueueStorage.updatePositionByUrl(location.href, trackedVideo.currentTime, trackedVideo.duration || 0);
@@ -114,17 +184,31 @@
 
   function maybePrompt() {
     if (!settings || !settings.popupEnabled) return;
+    if (location.href !== lastUrl) {
+      noteNavigation();
+      return;
+    }
     var url = location.href;
     if (toastShownForUrl === url || dismissedForUrl === url || savedForUrl === url) return;
     if (watchedSeconds < settings.popupDelaySeconds) return;
+    if (promptInFlight) return;
+    if (!freshTitle()) return;
 
+    promptInFlight = true;
+    var generation = promptGeneration;
     QueueStorage.hasUrl(url).then(function (already) {
+      if (generation !== promptGeneration || location.href !== url) return;
+      promptInFlight = false;
       if (already) {
         savedForUrl = url;
         return;
       }
-      showToast(getVideoMeta());
+      var meta = getVideoMeta();
+      if (meta.titleStale || meta.url !== url) return;
+      showToast(meta);
       toastShownForUrl = url;
+    }, function () {
+      if (generation === promptGeneration) promptInFlight = false;
     });
   }
 
@@ -143,7 +227,8 @@
       "h1.title",
       ".ytp-title-link"
     ];
-    for (var i = 0; i < selectors.length; i++) {
+    var i;
+    for (i = 0; i < selectors.length; i++) {
       var el = document.querySelector(selectors[i]);
       var text = el && (el.textContent || "").trim();
       if (text) return text;
@@ -151,21 +236,41 @@
     return "";
   }
 
+  function siteNameOf() {
+    return metaContent('meta[property="og:site_name"]') || location.hostname.replace(/^www\./, "");
+  }
+
+  function titleCandidates() {
+    // Only the watch heading, tab title, and og:title. Other text on the
+    // page (ads, recommendations) is not a title for this video.
+    return [
+      visiblePlayerTitle(),
+      document.title,
+      metaContent('meta[property="og:title"]')
+    ];
+  }
+
+  function freshTitle() {
+    return QueueStorage.pickFreshTitle(titleCandidates(), siteNameOf(), staleTitles);
+  }
+
+  function rememberCommittedTitle() {
+    var fresh = freshTitle();
+    if (fresh) committedTitle = fresh;
+  }
+
   function getVideoMeta() {
-    var ogTitle = metaContent('meta[property="og:title"]');
     var ogImage = metaContent('meta[property="og:image"]');
-    var ogSite = metaContent('meta[property="og:site_name"]');
-    var siteName = ogSite || location.hostname.replace(/^www\./, "");
-    // Prefer visible player title, then document.title, then og:title.
-    // YouTube SPA nav often leaves og:title stuck on the brand; document.title
-    // may also carry a "(N)" notification prefix.
-    var title = QueueStorage.pickBestTitle(
-      [visiblePlayerTitle(), document.title, ogTitle],
-      siteName
-    );
+    var siteName = siteNameOf();
+    // YouTube SPA navigations update the player immediately and the heading
+    // later. A title that still matches the previous video is not usable yet.
+    var fresh = freshTitle();
+    if (fresh) committedTitle = fresh;
+    var title = fresh || QueueStorage.pickBestTitle(titleCandidates(), siteName);
     return {
       url: location.href,
       title: title,
+      titleStale: !fresh,
       thumbnail: ogImage || "",
       siteName: siteName,
       position: trackedVideo ? trackedVideo.currentTime || 0 : 0,

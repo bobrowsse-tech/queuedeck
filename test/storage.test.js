@@ -194,6 +194,36 @@ test("pickBestTitle prefers real titles over YouTube brand stubs", function () {
   assert.equal(QueueStorage.stripSiteSuffix("Clip - YouTube"), "Clip");
 });
 
+test("pickFreshTitle waits out titles left behind by the previous video", function () {
+  var { QueueStorage } = loadQueueStorage();
+  var stale = ["Calming White Flowers", "Elegant Blooming Flower"];
+  assert.equal(
+    QueueStorage.pickFreshTitle(
+      [
+        "Calming White Flowers - YouTube",
+        "(3) Calming White Flowers - YouTube",
+        "Elegant Blooming Flower"
+      ],
+      "YouTube",
+      stale
+    ),
+    ""
+  );
+  assert.equal(
+    QueueStorage.pickFreshTitle(
+      ["Calming White Flowers", "White Floral Elegance - YouTube", "Elegant Blooming Flower"],
+      "YouTube",
+      ["calming white flowers", "elegant blooming flower"]
+    ),
+    "White Floral Elegance"
+  );
+  assert.equal(QueueStorage.pickFreshTitle(["YouTube", ""], "YouTube", []), "");
+  assert.equal(
+    QueueStorage.pickFreshTitle(["How to Brew - YouTube"], "YouTube", []),
+    "How to Brew"
+  );
+});
+
 test("addItem upgrades a weak title and empty thumbnail on re-save", async function () {
   var { QueueStorage, mock } = loadQueueStorage();
   mock.clear();

@@ -110,6 +110,30 @@ var QueueStorage = (function () {
     return "Untitled";
   }
 
+  // Like pickBestTitle, but returns "" when every usable candidate is weak or
+  // still belongs to a video the viewer already left. Callers wait and try
+  // again instead of labeling the new page with the previous title.
+  function pickFreshTitle(candidates, siteName, staleList) {
+    var rejected = {};
+    var stale = Array.isArray(staleList) ? staleList : [];
+    var s;
+    var key;
+    for (s = 0; s < stale.length; s++) {
+      key = stripSiteSuffix(stale[s] || "").toLowerCase();
+      if (key) rejected[key] = true;
+    }
+    var list = Array.isArray(candidates) ? candidates : [];
+    var i;
+    var cleaned;
+    for (i = 0; i < list.length; i++) {
+      cleaned = stripSiteSuffix(list[i] || "");
+      if (!cleaned || isWeakTitle(cleaned, siteName)) continue;
+      if (rejected[cleaned.toLowerCase()]) continue;
+      return cleaned;
+    }
+    return "";
+  }
+
   // Fill missing fields so older saved lists stay readable after schema adds.
   function normalizeItem(raw) {
     if (!raw || typeof raw !== "object") return null;
@@ -333,7 +357,8 @@ var QueueStorage = (function () {
     hasUrl: hasUrl,
     stripSiteSuffix: stripSiteSuffix,
     isWeakTitle: isWeakTitle,
-    pickBestTitle: pickBestTitle
+    pickBestTitle: pickBestTitle,
+    pickFreshTitle: pickFreshTitle
   };
 })();
 
