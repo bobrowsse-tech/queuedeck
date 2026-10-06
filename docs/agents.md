@@ -17,9 +17,10 @@ server."
 2. **No new permissions or `host_permissions`** in `manifest.json` without
    explicit user sign-off in the same conversation/PR — permissions are
    the thing Chrome Web Store reviewers and users both scrutinize first.
-3. **`chrome.storage.local` only.** Never switch to `chrome.storage.sync`
-   or add any server-backed persistence — that would silently make saved
-   videos leave the device.
+3. **`chrome.storage.local` only for video data.** Never switch videos to
+   `chrome.storage.sync` or add any server-backed persistence — that would
+   silently make saved videos leave the device. The only `chrome.storage.session`
+   use is the per-list unlock grant inside `QueueStorage`.
 4. **`storage.js` is the only writer.** Every read/write of extension data
    goes through the `QueueStorage` API. Do not call
    `chrome.storage.local.get/set` directly from `content.js`, `popup.js`,

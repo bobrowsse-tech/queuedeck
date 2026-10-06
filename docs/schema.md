@@ -4,7 +4,41 @@ There is no API and no database — this documents the two objects Queue
 keeps in `chrome.storage.local`, which together are the entire "contract"
 of the app. Both are owned exclusively by `storage.js` (`QueueStorage`).
 
-## `queue_items` → `QueueItem[]`
+## `queue_items` → library
+
+Older installs stored a bare `QueueItem[]`. On the first read, `storage.js`
+writes that array back once as a single list named "Watch later", and the
+generated list id stays stable. A missing key creates that same empty list.
+
+```ts
+interface Library {
+  lists: QueueList[];
+}
+
+interface QueueList {
+  id: string;             // "l_<timestamp36>_<random7>"
+  name: string;           // trimmed, at most 80 characters
+  locked: boolean;        // default false; forced false without lockCredentialId
+  items: QueueItem[];
+}
+```
+
+`activeListId` is the list the popup is showing. `saveListId` is where a
+save with no list id goes (the toast and the keyboard shortcut). Adding
+from the popup writes to the open list and then points `saveListId` at it.
+Switching the visible list does not change the save target.
+
+De-dupe is per list: the same normalized URL may exist in two lists.
+`updatePositionByUrl` advances every copy and still never moves `position`
+backwards. `hasUrl(url)` checks only the save-target list. `hasUrl(url, listId)`
+checks one list. `getItems()` still returns every item in every list so the
+toolbar badge can keep using its length.
+
+Deleting a list deletes its items. The last list cannot be deleted.
+`clearList` empties one list. `clearAll` empties items in every list and
+keeps the lists.
+
+## `queue_items` items → `QueueItem`
 
 ```ts
 interface QueueItem {
@@ -19,6 +53,7 @@ interface QueueItem {
   duration: number;       // video duration in seconds at last sync, or 0
   addedAt: number;        // Date.now() at save time (ms epoch)
   watched: boolean;       // toggled from the popup; default false
+  manualOrder?: number;  // stored order; missing values read as the array index and are not rewritten until a later write
 }
 ```
 
@@ -53,8 +88,11 @@ interface QueueSettings {
   popupEnabled: boolean;      // default true — passive toast on/off
   popupDelaySeconds: number;  // default 20 — seconds of playback before the toast
   theme: "system" | "light" | "dark"; // default "system"
-  listSort: "newest" | "oldest" | "site"; // default "newest" — popup list order
+  listSort: "newest" | "oldest" | "site" | "manual"; // default "newest" — popup list order
   listFilter: "all" | "unwatched" | "watched"; // default "all" — popup list filter
+  activeListId: string;   // list shown in the popup; falls back to the first list
+  saveListId: string;     // silent-save target; falls back to the first list
+  lockCredentialId: string; // platform WebAuthn credential id, or ""
 }
 ```
 
@@ -76,13 +114,21 @@ first use.
 
 ## Export/import shape
 
-The JSON file produced by "Export as JSON" (`options.js`) is simply
-`QueueItem[]` — the same shape as `queue_items`, serialized directly.
-Import goes through `QueueStorage.importItems()`, which accepts that shape
-(or a loosely-typed version: any object with at least a `url` is accepted,
-missing fields fall back to sane defaults including `note`, `position`,
-and `duration`) and merges it into the existing list using the same
-`normalizedUrl` de-duplication as `addItem()`. Newly imported items keep
-the order they appear in the file and are prepended ahead of existing
-items.
+Export downloads `{ version: 2, lists }` with each list's id, name, locked
+flag, and items. It does not include `lockCredentialId`. A locked list that
+has not been unlocked this browser session exports its name and an empty
+items array.
+
+Import accepts that version-2 file (match an existing list by id, then by
+name, otherwise create it; de-dupe inside the list; new item ids) and a
+bare `QueueItem[]`, which merges into the save-target list. Anything else
+is rejected. A locked list without a session grant is not imported into.
+
+## Unlock grants
+
+`chrome.storage.session` holds `{ queue_grants: { [listId]: true } }`,
+written only by `QueueStorage`. Grants die with the browser session and
+are not video data. A grant unlocks that one list in the popup and on the
+options page. The lock is a UI gate: WebAuthn checks the device unlock, and
+the videos stay readable in `chrome.storage.local`.
 

@@ -122,11 +122,48 @@ I left off, **so that** I don't have to scrub through it again.
 **so that** I can find what I actually want to watch.
 
 - [x] Filter: All / Unwatched / Watched.
-- [x] Sort: Newest first / Oldest first / By site.
+- [x] Sort: Newest first / Oldest first / By site / Custom.
+- [x] Custom follows each item's stored `manualOrder`. Newest, oldest, and
+  by site only change the view.
+- [x] A drag, or Arrow Up / Arrow Down on the row handle, moves that video
+  among the rows on screen, stores that order, and switches the sort to
+  Custom. The handle is disabled unless the filter is All.
 - [x] Both choices persist (stored in settings) across popup opens.
 - [x] An empty-filter state ("Nothing matches this filter") is distinct
   from the true empty-list state, so it's clear the list isn't actually
   empty.
+
+## F12 — Named lists
+
+**As a** person saving videos for different reasons, **I want** more than
+one list, **so that** I can keep them apart.
+
+- [x] Existing videos migrate into one list named Watch later.
+- [x] The popup chooses which list is open. Creating, renaming, and
+  deleting lists happens in Settings. The last list cannot be deleted.
+- [x] The in-page prompt and the keyboard shortcut save into the current
+  save target with no extra prompt. Adding from the popup saves into the
+  open list and makes that the next silent target.
+- [x] The same video may sit in two lists. Resume position updates every copy.
+- [x] Export is a version-2 file of named lists. An older bare-array backup
+  still imports into the save-target list.
+
+## F13 — List lock
+
+**As a** person with a private list, **I want** to hide it behind the
+unlock I already use on this device, **so that** opening QueueDeck does
+not show those videos.
+
+- [x] Lock is optional per list and uses the browser's platform authenticator
+  (device password, fingerprint, Windows Hello, or PIN). There is no
+  separate QueueDeck password.
+- [x] Saving into a locked list still works, from the prompt, the shortcut,
+  and the popup Add button.
+- [x] Until the list is unlocked, the popup and Settings hide its videos,
+  counts, and edit actions. Unlock lasts for the browser session.
+- [x] The lock is a screen gate. It does not encrypt the saved videos.
+- [x] If this device has no OS unlock the browser can use, the lock stays off.
+- [x] Locking a list again hides it immediately, including after it was unlocked earlier in this browser session.
 
 ## Out of scope (v1)
 

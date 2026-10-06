@@ -41,6 +41,15 @@ test("extension sources make no network calls", function () {
   });
 });
 
+test("only storage.js touches chrome.storage.session", function () {
+  var offenders = ["background.js", "content.js", "popup.js", "options.js"];
+  var pattern = /chrome\.storage\.session\.(get|set)\b/;
+  offenders.forEach(function (file) {
+    assert.equal(pattern.test(read(file)), false, file + " bypasses QueueStorage");
+  });
+  assert.ok(pattern.test(read("storage.js")));
+});
+
 test("only storage.js touches chrome.storage.local get/set", function () {
   var offenders = ["background.js", "content.js", "popup.js", "options.js"];
   var pattern = /chrome\.storage\.local\.(get|set)\b/;

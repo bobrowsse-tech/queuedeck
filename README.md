@@ -14,10 +14,17 @@ local storage.
 - **One-click save.** Click the toolbar icon any time — if the current tab
   has a video, QueueDeck shows an **Add** button at the top of the
   popup so you can save it immediately, no waiting required.
+- **Named lists.** Videos live in lists you name. Existing videos stay in
+  Watch later. The popup switches lists; Settings creates, renames, and
+  deletes them. A page prompt still saves with no extra step.
 - **A real playlist.** Every saved video is listed with its thumbnail,
   title, source site, and when it was added. Click any entry to open it in
   a new tab. Mark videos watched, rename them, remove one, or clear
-  everything.
+  everything. Drag a row, or press the arrow keys on its handle, to set a
+  custom order.
+- **Optional list lock.** Hide a list behind this device's existing unlock
+  (password, fingerprint, or PIN). Saving into a locked list still works.
+  The lock hides the list on screen; it does not encrypt it.
 - **Keyboard shortcut.** `Ctrl+Shift+S` (`⌃⇧S` on Mac) saves the active
   tab's video instantly, no popup required — the toolbar badge flashes to
   confirm. Customizable at `chrome://extensions/shortcuts`.
@@ -26,7 +33,7 @@ local storage.
   playing, with a progress bar and "Resume at mm:ss" — plus a real resume
   link on YouTube and Vimeo.
 - **Sort & filter.** All / Unwatched / Watched, and Newest / Oldest / By
-  site — both remembered between popup opens.
+  site / Custom — both remembered between popup opens.
 - **Local-first.** Data is stored with `chrome.storage.local`, which
   persists across browser restarts and extension updates, and is cleared
   only when you clear it (or uninstall the extension). Nothing is ever sent

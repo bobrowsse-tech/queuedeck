@@ -36,6 +36,14 @@
 
     <div class="controlbar">
       <label class="control">
+        <span class="sr-only">List</span>
+        <select id="listSelect" aria-label="Choose a list"></select>
+      </label>
+    </div>
+    <p id="saveTargetNote" class="save-target" hidden></p>
+
+    <div class="controlbar">
+      <label class="control">
         <span class="sr-only">Filter</span>
         <select id="filterSelect" aria-label="Filter saved videos">
           <option value="all">All</option>
@@ -49,6 +57,7 @@
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
           <option value="site">By site</option>
+          <option value="manual">Custom</option>
         </select>
       </label>
     </div>
@@ -63,8 +72,16 @@
       Nothing matches this filter.
     </p>
 
+    <div id="lockedState" class="empty-state locked-state" hidden>
+      <p>This list is locked. Unlock it in settings to see the videos. Saving still works.</p>
+      <button type="button" id="unlockList" class="btn btn-primary btn-sm">Unlock in settings</button>
+    </div>
+
     <template id="itemTemplate">
       <li class="item">
+        <button type="button" class="icon-btn drag-handle" draggable="true" aria-label="Reorder. Use the up and down arrow keys to move.">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 6h2v2H8zm6 0h2v2h-2zM8 11h2v2H8zm6 0h2v2h-2zM8 16h2v2H8zm6 0h2v2h-2z"/></svg>
+        </button>
         <a class="item-link" target="_blank" rel="noopener noreferrer">
           <span class="item-thumb">
             <span class="item-thumb-fallback" aria-hidden="true">▶</span>
