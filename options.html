@@ -73,9 +73,21 @@
       </p>
     </section>
 
+    <section class="card" aria-labelledby="lists-heading">
+      <h2 id="lists-heading">Lists</h2>
+      <p class="hint" id="saveTargetHint">Videos saved from a page go to your first list.</p>
+      <p class="hint" id="lockHint">A lock hides a list until this device unlocks it. It is a screen lock, not encryption, and saving a video still works.</p>
+      <ul id="listManager" class="list-manager" aria-label="Your lists"></ul>
+      <form id="createListForm" class="create-list">
+        <label class="sr-only" for="newListName">New list name</label>
+        <input id="newListName" type="text" maxlength="80" autocomplete="off" placeholder="New list name" required />
+        <button type="submit" class="btn btn-secondary">Create list</button>
+      </form>
+    </section>
+
     <section class="card" aria-labelledby="data-heading">
       <h2 id="data-heading">Your data</h2>
-      <p class="hint">QueueDeck collects nothing and sends nothing anywhere. Your saved list lives in this browser's local storage and survives restarts and extension updates — it only leaves this device if you export it yourself.</p>
+      <p class="hint">QueueDeck collects nothing and sends nothing anywhere. Your saved lists live in this browser's local storage and survive restarts and extension updates — they only leave this device if you export them yourself. A list lock hides videos on screen until this device unlocks them. It does not encrypt them.</p>
       <div class="btn-row">
         <button type="button" id="exportBtn" class="btn btn-secondary">Export as JSON</button>
         <button type="button" id="importBtn" class="btn btn-secondary">Import JSON</button>

@@ -11,6 +11,10 @@
   var liveRegion = document.getElementById("liveRegion");
   var filterSelect = document.getElementById("filterSelect");
   var sortSelect = document.getElementById("sortSelect");
+  var listSelect = document.getElementById("listSelect");
+  var saveTargetNote = document.getElementById("saveTargetNote");
+  var lockedState = document.getElementById("lockedState");
+  var unlockListBtn = document.getElementById("unlockList");
 
   var quickAdd = document.getElementById("quickAdd");
   var quickAddThumb = document.getElementById("quickAddThumb");
@@ -18,6 +22,7 @@
   var quickAddBtn = document.getElementById("quickAddBtn");
 
   var currentTabMeta = null;
+  var focusAfterRender = null;
 
   function applyTheme(settings) {
     if (settings.theme === "light" || settings.theme === "dark") {
@@ -36,13 +41,28 @@
   openOptionsBtn.addEventListener("click", function () {
     chrome.runtime.openOptionsPage();
   });
+  unlockListBtn.addEventListener("click", function () {
+    chrome.runtime.openOptionsPage();
+  });
 
   clearBtn.addEventListener("click", function () {
-    QueueStorage.getItems().then(function (items) {
-      if (items.length === 0) return;
-      if (confirm("Remove all " + items.length + " saved videos? This can't be undone.")) {
-        QueueStorage.clearAll().then(render);
-      }
+    QueueStorage.getSettings().then(function (settings) {
+      return QueueStorage.getListItems(settings.activeListId).then(function (items) {
+        if (items.length === 0) return;
+        var name = listSelect.options[listSelect.selectedIndex]
+          ? listSelect.options[listSelect.selectedIndex].textContent
+          : "this list";
+        if (confirm("Remove all " + items.length + " saved videos from " + name + "? This can't be undone.")) {
+          QueueStorage.clearList(settings.activeListId).then(render);
+        }
+      });
+    });
+  });
+
+  listSelect.addEventListener("change", function () {
+    QueueStorage.setSettings({ activeListId: listSelect.value }).then(function () {
+      render();
+      refreshQuickAdd();
     });
   });
 
@@ -116,27 +136,128 @@
       filtered.sort(function (a, b) {
         return (a.siteName || "").localeCompare(b.siteName || "") || (b.addedAt - a.addedAt);
       });
+    } else if (settings.listSort === "manual") {
+      filtered.sort(function (a, b) { return a.manualOrder - b.manualOrder; });
     } else {
       filtered.sort(function (a, b) { return b.addedAt - a.addedAt; });
     }
     return filtered;
   }
 
-  function render() {
-    Promise.all([QueueStorage.getItems(), QueueStorage.getSettings()]).then(function (res) {
-      var items = res[0];
-      var settings = res[1];
-      var visible = applyFilterAndSort(items, settings);
+  function fillListSelect(lists, activeId) {
+    var signature = lists.map(function (list) { return list.id + ":" + list.name; }).join("|");
+    if (listSelect.dataset.signature !== signature) {
+      listSelect.dataset.signature = signature;
+      while (listSelect.firstChild) listSelect.removeChild(listSelect.firstChild);
+      lists.forEach(function (list) {
+        var option = document.createElement("option");
+        option.value = list.id;
+        option.textContent = list.name;
+        listSelect.appendChild(option);
+      });
+    }
+    if (activeId && listSelect.value !== activeId) listSelect.value = activeId;
+  }
 
-      listEl.innerHTML = "";
+  function render() {
+    Promise.all([QueueStorage.getLists(), QueueStorage.getSettings(), QueueStorage.getGrants()]).then(function (res) {
+      var lists = res[0];
+      var settings = res[1];
+      var grants = res[2];
+      var open = null;
+      var saveList = null;
+      lists.forEach(function (list) {
+        if (list.id === settings.activeListId) open = list;
+        if (list.id === settings.saveListId) saveList = list;
+      });
+      if (!open) open = lists[0];
+      fillListSelect(lists, open ? open.id : "");
+      var items = open ? open.items : [];
+      if (saveList && open && saveList.id !== open.id) {
+        saveTargetNote.hidden = false;
+        saveTargetNote.textContent = "Saves from a page go to " + saveList.name;
+      } else {
+        saveTargetNote.hidden = true;
+        saveTargetNote.textContent = "";
+      }
+      var visible = applyFilterAndSort(items, settings);
+      var locked = !!(open && open.locked && !QueueStorage.listAccessGranted(open, grants));
+
+      while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+      if (locked) {
+        countEl.textContent = "Locked";
+        emptyEl.hidden = true;
+        clearBtn.hidden = true;
+        noMatchesEl.hidden = true;
+        lockedState.hidden = false;
+        focusAfterRender = null;
+        return;
+      }
+      lockedState.hidden = true;
       countEl.textContent = items.length + (items.length === 1 ? " saved" : " saved");
       emptyEl.hidden = items.length > 0;
       clearBtn.hidden = items.length === 0;
       noMatchesEl.hidden = !(items.length > 0 && visible.length === 0);
 
+      var reorderEnabled = settings.listFilter === "all";
       visible.forEach(function (item) {
         var node = itemTemplate.content.firstElementChild.cloneNode(true);
         node.classList.toggle("watched", !!item.watched);
+
+        var handle = node.querySelector(".drag-handle");
+        handle.disabled = !reorderEnabled;
+        handle.draggable = reorderEnabled;
+        if (!reorderEnabled) handle.setAttribute("aria-disabled", "true");
+        handle.addEventListener("keydown", function (e) {
+          if (!reorderEnabled) return;
+          if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+          e.preventDefault();
+          var ids = visible.map(function (entry) { return entry.id; });
+          var from = ids.indexOf(item.id);
+          var to = e.key === "ArrowDown" ? from + 1 : from - 1;
+          if (from < 0 || to < 0 || to >= ids.length) return;
+          ids.splice(from, 1);
+          ids.splice(to, 0, item.id);
+          focusAfterRender = item.id;
+          QueueStorage.applyOrder(ids).then(function () {
+            announce("Moved " + item.title);
+            render();
+          });
+        });
+        handle.addEventListener("dragstart", function (e) {
+          if (!reorderEnabled) {
+            e.preventDefault();
+            return;
+          }
+          e.dataTransfer.setData("text/plain", item.id);
+          e.dataTransfer.effectAllowed = "move";
+          node.classList.add("dragging");
+        });
+        handle.addEventListener("dragend", function () {
+          node.classList.remove("dragging");
+        });
+        node.addEventListener("dragover", function (e) {
+          if (!reorderEnabled) return;
+          e.preventDefault();
+        });
+        node.addEventListener("drop", function (e) {
+          if (!reorderEnabled) return;
+          e.preventDefault();
+          var draggedId = e.dataTransfer.getData("text/plain");
+          if (!draggedId || draggedId === item.id) return;
+          var ids = visible.map(function (entry) { return entry.id; });
+          var from = ids.indexOf(draggedId);
+          var to = ids.indexOf(item.id);
+          if (from < 0 || to < 0) return;
+          ids.splice(from, 1);
+          ids.splice(to, 0, draggedId);
+          var dragged = visible.filter(function (entry) { return entry.id === draggedId; })[0];
+          QueueStorage.applyOrder(ids).then(function () {
+            announce("Moved " + (dragged ? dragged.title : "video"));
+            render();
+          });
+        });
+        if (focusAfterRender === item.id) node.dataset.restoreFocus = "true";
 
         var link = node.querySelector(".item-link");
         link.href = buildResumeUrl(item);
@@ -214,6 +335,11 @@
 
         listEl.appendChild(node);
       });
+      if (focusAfterRender) {
+        var restored = listEl.querySelector('[data-restore-focus="true"] .drag-handle');
+        if (restored) restored.focus();
+      }
+      focusAfterRender = null;
     });
   }
 
@@ -233,8 +359,10 @@
         };
         currentTabMeta = meta;
 
-        QueueStorage.hasUrl(meta.url).then(function (already) {
-          if (already) return; // already saved — no need to prompt again
+        QueueStorage.getSettings().then(function (settings) {
+          return QueueStorage.hasUrl(meta.url, settings.activeListId);
+        }).then(function (already) {
+          if (already) return; // already in the open list
           quickAddTitle.textContent = meta.title;
           setThumbBackground(quickAddThumb, meta.thumbnail);
           quickAdd.hidden = false;
@@ -293,21 +421,48 @@
     } catch (e) { /* ignore bad / relative thumbnail URLs */ }
   }
 
+  function refreshQuickAdd() {
+    if (!currentTabMeta) return;
+    QueueStorage.getSettings().then(function (settings) {
+      return QueueStorage.hasUrl(currentTabMeta.url, settings.activeListId);
+    }).then(function (already) {
+      if (already) {
+        quickAdd.hidden = true;
+        return;
+      }
+      quickAddTitle.textContent = currentTabMeta.title;
+      setThumbBackground(quickAddThumb, currentTabMeta.thumbnail);
+      quickAdd.hidden = false;
+    });
+  }
+
   quickAddBtn.addEventListener("click", function () {
     if (!currentTabMeta) return;
-    QueueStorage.addItem(currentTabMeta).then(function () {
-      quickAdd.hidden = true;
-      announce("Added to QueueDeck");
-      render();
+    QueueStorage.getSettings().then(function (settings) {
+      var listName = listSelect.options[listSelect.selectedIndex]
+        ? listSelect.options[listSelect.selectedIndex].textContent
+        : "QueueDeck";
+      return QueueStorage.addItem(currentTabMeta, settings.activeListId).then(function () {
+        quickAdd.hidden = true;
+        announce("Added to " + listName);
+        render();
+      });
     });
   });
 
   chrome.storage.onChanged.addListener(function (changes, area) {
+    if (area === "session") {
+      render();
+      return;
+    }
     if (area !== "local") return;
     if (changes[QueueStorage.KEYS.SETTINGS]) {
       applyTheme(Object.assign({}, QueueStorage.DEFAULT_SETTINGS, changes[QueueStorage.KEYS.SETTINGS].newValue || {}));
     }
-    if (changes[QueueStorage.KEYS.ITEMS] || changes[QueueStorage.KEYS.SETTINGS]) render();
+    if (changes[QueueStorage.KEYS.ITEMS] || changes[QueueStorage.KEYS.SETTINGS]) {
+      render();
+      refreshQuickAdd();
+    }
   });
 
   render();

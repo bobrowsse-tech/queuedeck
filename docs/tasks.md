@@ -1,12 +1,20 @@
 # Tasks
 
+## Lists, lock, and reorder
+
+- [x] Named lists under the existing `queue_items` key, with a one-time
+      migration of the old array into Watch later
+- [x] Popup list switcher and Settings create / rename / delete
+- [x] Optional per-list lock via the platform authenticator; saves stay open
+- [x] Stored manual order, Custom sort, drag handle, and arrow-key move
+- [ ] Manual check in Chrome of the OS unlock prompt and drag reorder
+
 ## Next — GitHub → Chrome Web Store publish
 
 - [ ] Add `CWS_EXTENSION_ID`, `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`,
       `CWS_REFRESH_TOKEN` repository secrets (see `docs/store-listing.md`)
 - [x] Workflow `.github/workflows/publish-chrome.yml` (manual + `v*` tags)
-- [ ] First automated upload of 1.1.2 (or cancel pending 1.1.1, then run
-      Actions → Publish Chrome Web Store)
+- [ ] Publish 1.1.5 (named lists, per-list lock, manual reorder) with tag `v1.1.5`
 
 ## v1.1.2 — title capture
 

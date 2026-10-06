@@ -29,8 +29,12 @@ step. There is nothing to deploy — the artifact *is* the source.
 
 ## Layers and boundaries
 
-- **`storage.js`** is the only code that touches `chrome.storage.local`.
-  Every other file goes through its `QueueStorage` API
+- **`storage.js`** is the only code that touches `chrome.storage.local`,
+  and the only code that touches `chrome.storage.session`. Session storage
+  holds the per-list unlock grant, not the videos. The popup and the
+  options page enforce a locked list; `addItem` does not. WebAuthn runs
+  only on the options page.
+  Every other file goes through the `QueueStorage` API
   (`getItems`, `addItem`, `removeItem`, `updateItem`, `clearAll`,
   `importItems`, `getSettings`, `setSettings`). This keeps the storage
   schema in one place and makes it safe to change later without hunting
@@ -50,8 +54,8 @@ step. There is nothing to deploy — the artifact *is* the source.
 - **`popup.js`** is the primary surface for browsing, opening, renaming,
   marking watched, removing, and clearing items, plus the "Add current
   tab" quick action.
-- **`options.js`** owns settings (prompt on/off, delay, theme) and the
-  data controls (export/import/clear).
+- **`options.js`** owns settings (prompt on/off, delay, theme), named
+  lists, the list lock, and the data controls (export/import/clear).
 
 ## Why Manifest V3 + vanilla JS, no framework
 

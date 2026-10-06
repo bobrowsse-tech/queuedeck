@@ -292,3 +292,299 @@ test("addItem upgrades a weak title and empty thumbnail on re-save", async funct
   });
   assert.equal(kept.item.title, "Deep Dive into Storage");
 });
+
+test("a stored array migrates once and keeps its list id", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  mock.store.queue_items = [{
+    id: "q_old",
+    url: "https://example.com/legacy",
+    normalizedUrl: "https://example.com/legacy",
+    title: "Legacy",
+    addedAt: 1,
+    watched: false
+  }];
+  var first = await QueueStorage.getLists();
+  var second = await QueueStorage.getLists();
+  assert.equal(first.length, 1);
+  assert.equal(first[0].name, "Watch later");
+  assert.equal(first[0].id, second[0].id);
+  assert.equal(second[0].items.length, 1);
+  assert.equal(second[0].items[0].title, "Legacy");
+  assert.equal(second[0].items[0].id, "q_old");
+  assert.equal(Array.isArray(mock.store.queue_items), false);
+  assert.equal(mock.store.queue_items.lists[0].id, first[0].id);
+});
+
+test("empty storage creates one list", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  var lists = await QueueStorage.getLists();
+  assert.equal(lists.length, 1);
+  assert.equal(lists[0].name, "Watch later");
+  assert.equal(lists[0].items.length, 0);
+  assert.equal(lists[0].locked, false);
+});
+
+test("the same video can exist in two lists and resume updates both", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  var first = await QueueStorage.addItem({
+    url: "https://example.com/shared",
+    title: "Shared",
+    position: 10,
+    duration: 100
+  });
+  var other = await QueueStorage.createList("Reference");
+  var second = await QueueStorage.addItem({
+    url: "https://example.com/shared?utm_source=x",
+    title: "Shared",
+    position: 10,
+    duration: 100
+  }, other.id);
+  assert.equal(first.alreadyExisted, false);
+  assert.equal(second.alreadyExisted, false);
+  assert.notEqual(first.item.id, second.item.id);
+  var all = await QueueStorage.getItems();
+  assert.equal(all.length, 2);
+
+  var updated = await QueueStorage.updatePositionByUrl("https://example.com/shared", 40, 120);
+  assert.equal(updated.position, 40);
+  var watchLater = await QueueStorage.getListItems(first.item && (await QueueStorage.getLists())[0].id);
+  var lists = await QueueStorage.getLists();
+  assert.equal(lists[0].items[0].position, 40);
+  assert.equal(lists[1].items[0].position, 40);
+  assert.equal(lists[0].items[0].duration, 120);
+  assert.equal(lists[1].items[0].duration, 120);
+
+  var missing = await QueueStorage.updatePositionByUrl("https://example.com/nowhere", 5, 10);
+  assert.equal(missing, null);
+  assert.equal(watchLater[0].position, 40);
+});
+
+test("hasUrl follows the save target, and addItem can switch it", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.addItem({ url: "https://example.com/home", title: "Home" });
+  var clips = await QueueStorage.createList("Clips");
+  assert.equal(await QueueStorage.hasUrl("https://example.com/home"), true);
+  assert.equal(await QueueStorage.hasUrl("https://example.com/home", clips.id), false);
+
+  await QueueStorage.addItem({ url: "https://example.com/clip", title: "Clip" }, clips.id);
+  assert.equal(await QueueStorage.hasUrl("https://example.com/clip"), true);
+  assert.equal(await QueueStorage.hasUrl("https://example.com/home"), false);
+  assert.equal(await QueueStorage.hasUrl("https://example.com/clip", clips.id), true);
+
+  await QueueStorage.addItem({ url: "https://example.com/silent", title: "Silent" });
+  var lists = await QueueStorage.getLists();
+  var silentList = lists.filter(function (list) {
+    return list.items.some(function (item) { return item.url === "https://example.com/silent"; });
+  });
+  assert.equal(silentList.length, 1);
+  assert.equal(silentList[0].id, clips.id);
+});
+
+test("deleteList refuses the last list and drops that list's videos", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  var lists = await QueueStorage.getLists();
+  await assert.rejects(function () { return QueueStorage.deleteList(lists[0].id); });
+  var extra = await QueueStorage.createList("Temporary");
+  await QueueStorage.addItem({ url: "https://example.com/gone", title: "Gone" }, extra.id);
+  await QueueStorage.deleteList(extra.id);
+  var remaining = await QueueStorage.getLists();
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].id, lists[0].id);
+  var items = await QueueStorage.getItems();
+  assert.equal(items.some(function (item) { return item.url === "https://example.com/gone"; }), false);
+  var settings = await QueueStorage.getSettings();
+  assert.equal(settings.saveListId, lists[0].id);
+  assert.equal(settings.activeListId, lists[0].id);
+});
+
+test("a version-2 export round-trips names and items", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.addItem({ url: "https://example.com/a", title: "Alpha" });
+  var reference = await QueueStorage.createList("Reference");
+  await QueueStorage.addItem({ url: "https://example.com/b", title: "Beta" }, reference.id);
+  var file = { version: 2, lists: await QueueStorage.getLists() };
+  mock.clear();
+  var result = await QueueStorage.importItems(file);
+  assert.equal(result.added, 2);
+  var lists = await QueueStorage.getLists();
+  var names = lists.map(function (list) { return list.name; }).sort();
+  assert.equal(names.join("|"), "Reference|Watch later");
+  var titles = [];
+  lists.forEach(function (list) {
+    list.items.forEach(function (item) { titles.push(list.name + ":" + item.title); });
+  });
+  titles.sort();
+  assert.equal(titles.join("|"), "Reference:Beta|Watch later:Alpha");
+});
+
+test("a bare array merges into the save-target list", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.addItem({ url: "https://example.com/keep", title: "Keep" });
+  var clips = await QueueStorage.createList("Clips");
+  await QueueStorage.addItem({ url: "https://example.com/seed", title: "Seed" }, clips.id);
+  var result = await QueueStorage.importItems([
+    { url: "https://example.com/imported", title: "Imported", note: "from file" }
+  ]);
+  assert.equal(result.added, 1);
+  var lists = await QueueStorage.getLists();
+  var watchLater = lists[0];
+  var clipList = lists.filter(function (list) { return list.id === clips.id; })[0];
+  assert.equal(watchLater.items.some(function (item) { return item.title === "Imported"; }), false);
+  assert.equal(clipList.items[0].title, "Imported");
+  assert.equal(clipList.items[0].note, "from file");
+});
+
+test("a lock needs a credential, and a grant covers one list", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  var junk = await QueueStorage.setSettings({ lockCredentialId: 12 });
+  assert.equal(junk.lockCredentialId, "");
+
+  mock.store.queue_items = {
+    lists: [{ id: "l_planted", name: "Watch later", locked: true, items: [] }]
+  };
+  var planted = await QueueStorage.getLists();
+  assert.equal(planted[0].locked, false);
+  assert.equal(mock.store.queue_items.lists[0].locked, false);
+
+  var lists = await QueueStorage.getLists();
+  await assert.rejects(function () { return QueueStorage.setListLocked(lists[0].id, true); });
+  assert.equal((await QueueStorage.getLists())[0].locked, false);
+
+  await QueueStorage.setSettings({ lockCredentialId: "cred-1" });
+  var locked = await QueueStorage.setListLocked(lists[0].id, true);
+  assert.equal(locked.locked, true);
+  var other = await QueueStorage.createList("Open");
+  await QueueStorage.addItem({
+    url: "https://example.com/while-locked",
+    title: "Still saved"
+  }, lists[0].id);
+  var hidden = await QueueStorage.getListItems(lists[0].id);
+  assert.equal(hidden.length, 1);
+  assert.equal(hidden[0].title, "Still saved");
+
+  await QueueStorage.grantList(lists[0].id);
+  var grants = await QueueStorage.getGrants();
+  var current = await QueueStorage.getLists();
+  var lockedList = current.filter(function (list) { return list.id === lists[0].id; })[0];
+  var openList = current.filter(function (list) { return list.id === other.id; })[0];
+  assert.equal(QueueStorage.listAccessGranted(lockedList, grants), true);
+  assert.equal(QueueStorage.listAccessGranted(openList, grants), true);
+  await QueueStorage.setListLocked(other.id, true);
+  openList = (await QueueStorage.getLists()).filter(function (list) { return list.id === other.id; })[0];
+  assert.equal(QueueStorage.listAccessGranted(openList, grants), false);
+  assert.equal(mock.store.queue_grants, undefined);
+  assert.equal(mock.sessionStore.queue_grants[lists[0].id], true);
+
+  await QueueStorage.setSettings({ lockCredentialId: "" });
+  var cleared = await QueueStorage.getLists();
+  cleared.forEach(function (list) { assert.equal(list.locked, false); });
+});
+
+test("manual order stays put when the view sort changes", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  mock.store.queue_items = {
+    lists: [{
+      id: "l1",
+      name: "Watch later",
+      locked: false,
+      items: [
+        { id: "a", url: "https://example.com/a", normalizedUrl: "https://example.com/a", title: "A", addedAt: 2 },
+        { id: "b", url: "https://example.com/b", normalizedUrl: "https://example.com/b", title: "B", addedAt: 1 }
+      ]
+    }]
+  };
+  var read = await QueueStorage.getListItems("l1");
+  assert.equal(read[0].manualOrder, 0);
+  assert.equal(read[1].manualOrder, 1);
+  assert.equal(mock.store.queue_items.lists[0].items[0].manualOrder, undefined);
+
+  var added = await QueueStorage.addItem({ url: "https://example.com/c", title: "C" }, "l1");
+  assert.ok(added.item.manualOrder < read[0].manualOrder);
+  assert.equal((await QueueStorage.getSettings()).listSort, "newest");
+
+  await QueueStorage.moveItem("b", "up");
+  assert.equal((await QueueStorage.getSettings()).listSort, "manual");
+  var ordered = await QueueStorage.getListItems("l1");
+  var byId = {};
+  ordered.forEach(function (item) { byId[item.id] = item.manualOrder; });
+  assert.ok(byId.b < byId.a);
+
+  var snapshot = [byId.a, byId.b, byId[added.item.id]].join(":");
+  await QueueStorage.setSettings({ listSort: "oldest" });
+  var after = {};
+  (await QueueStorage.getListItems("l1")).forEach(function (item) { after[item.id] = item.manualOrder; });
+  assert.equal([after.a, after.b, after[added.item.id]].join(":"), snapshot);
+  assert.equal((await QueueStorage.getSettings()).listSort, "oldest");
+});
+
+test("locking again clears that list's unlock grant", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.setSettings({ lockCredentialId: "cred-1" });
+  var id = (await QueueStorage.getLists())[0].id;
+  await QueueStorage.setListLocked(id, true);
+  await QueueStorage.grantList(id);
+  await QueueStorage.setListLocked(id, false);
+  await QueueStorage.setListLocked(id, true);
+  var grants = await QueueStorage.getGrants();
+  var list = (await QueueStorage.getLists())[0];
+  assert.equal(grants[id], undefined);
+  assert.equal(list.locked, true);
+  assert.equal(QueueStorage.listAccessGranted(list, grants), false);
+});
+
+test("import puts new videos at the front of the custom order", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  var first = await QueueStorage.addItem({ url: "https://example.com/a", title: "A" });
+  var second = await QueueStorage.addItem({ url: "https://example.com/b", title: "B" });
+  await QueueStorage.applyOrder([first.item.id, second.item.id]);
+  await QueueStorage.importItems([
+    { url: "https://example.com/c", title: "C" },
+    { url: "https://example.com/d", title: "D" }
+  ]);
+  var items = await QueueStorage.getListItems((await QueueStorage.getLists())[0].id);
+  items.sort(function (a, b) { return a.manualOrder - b.manualOrder; });
+  assert.equal(items.map(function (item) { return item.title; }).join("|"), "C|D|A|B");
+});
+
+test("a locked Watch later backup stays locked when this device has a credential", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.setSettings({ lockCredentialId: "cred-1" });
+  await QueueStorage.importItems({
+    version: 2,
+    lists: [{
+      id: "l_from_backup",
+      name: "Watch later",
+      locked: true,
+      items: [{ url: "https://example.com/secret", title: "Secret" }]
+    }]
+  });
+  var lists = await QueueStorage.getLists();
+  assert.equal(lists.length, 1);
+  assert.equal(lists[0].name, "Watch later");
+  assert.equal(lists[0].locked, true);
+  assert.equal(lists[0].items[0].title, "Secret");
+
+  mock.clear();
+  await QueueStorage.importItems({
+    version: 2,
+    lists: [{
+      id: "l_from_backup",
+      name: "Watch later",
+      locked: true,
+      items: [{ url: "https://example.com/secret", title: "Secret" }]
+    }]
+  });
+  assert.equal((await QueueStorage.getLists())[0].locked, false);
+});

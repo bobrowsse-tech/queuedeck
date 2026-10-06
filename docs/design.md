@@ -63,6 +63,13 @@ tracked-out eyebrow labels.
   layout reflow of the rows around it) rather than as a modal or a
   separate page — keeps the "this is a lightweight queue, not a database"
   feel.
+- **List switcher**: a native `<select>` above the filter and sort, same
+  styling. A muted line names the silent-save list when it is not the
+  list on screen. A locked list replaces the rows with a short note and
+  an Unlock button that opens Settings. No video titles or counts.
+- **Drag handle**: a 30×30 icon button at the start of each row. Arrow Up
+  and Arrow Down move that row. The handle is disabled when a filter is
+  hiding rows. The drop does not animate when reduced motion is requested.
 - **Filter/sort bar**: two native `<select>` elements, not custom
   dropdown components — full keyboard/screen-reader support for free, and
   visually quiet enough to sit directly under the list header without
