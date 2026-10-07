@@ -15,15 +15,21 @@ QueueDeck saves video links so you can watch them later — no accounts, no serv
 • Passive save prompt while you’re watching (delay adjustable, or turn it off)
 • One-click Add from the toolbar popup when the current tab has a video
 • Keyboard shortcut Ctrl+Shift+S (⌃⇧S on Mac) to save instantly
-• Playlist with thumbnails, notes, watched state, sort & filter
+• Named lists, with silent saves going to the list you last saved into
+• Optional per-list lock using this device's existing unlock. Saving still works. Videos are not encrypted
+• Playlist with thumbnails, notes, watched state, sort, filter, and a custom order you set by dragging
 • Resume playback position on supported sites
-• Export / import your list from the Options page
+• Export / import your lists from the Options page
 
 QueueDeck is fully open source (MIT) and makes zero network requests of its own.
 
 ## Category
 
 Productivity
+
+The live dashboard shows Tools. This draft says Productivity. Leave the
+category unchanged; do not switch it from the doc. Paste the description
+into the dashboard by hand. The publish workflow does not update listing copy.
 
 ## Permission justification
 

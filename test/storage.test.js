@@ -588,3 +588,52 @@ test("a locked Watch later backup stays locked when this device has a credential
   });
   assert.equal((await QueueStorage.getLists())[0].locked, false);
 });
+
+test("clearList refuses a locked list until it is unlocked", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.setSettings({ lockCredentialId: "cred-1" });
+  var id = (await QueueStorage.getLists())[0].id;
+  await QueueStorage.addItem({ url: "https://example.com/a", title: "A" }, id);
+  await QueueStorage.setListLocked(id, true);
+  await assert.rejects(function () { return QueueStorage.clearList(id); });
+  assert.equal((await QueueStorage.getListItems(id)).length, 1);
+
+  await QueueStorage.grantList(id);
+  await QueueStorage.clearList(id);
+  assert.equal((await QueueStorage.getListItems(id)).length, 0);
+
+  await QueueStorage.setListLocked(id, false);
+  await QueueStorage.addItem({ url: "https://example.com/b", title: "B" }, id);
+  await QueueStorage.clearList(id);
+  assert.equal((await QueueStorage.getListItems(id)).length, 0);
+});
+
+test("importing a locked list revokes that list's unlock grant", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.setSettings({ lockCredentialId: "cred-1" });
+  var id = (await QueueStorage.getLists())[0].id;
+  await QueueStorage.grantList(id);
+  await QueueStorage.importItems({
+    version: 2,
+    lists: [{
+      id: id,
+      name: "Watch later",
+      locked: true,
+      items: [{ url: "https://example.com/secret", title: "Secret" }]
+    }]
+  });
+  var list = (await QueueStorage.getLists())[0];
+  var grants = await QueueStorage.getGrants();
+  assert.equal(list.locked, true);
+  assert.equal(grants[id], undefined);
+  assert.equal(QueueStorage.listAccessGranted(list, grants), false);
+
+  await QueueStorage.grantList(id);
+  await QueueStorage.importItems({
+    version: 2,
+    lists: [{ id: id, name: "Watch later", locked: false, items: [] }]
+  });
+  assert.equal((await QueueStorage.getGrants())[id], true);
+});

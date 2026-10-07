@@ -516,8 +516,9 @@ var QueueStorage = (function () {
 
   function importLibraryFile(incomingLists) {
     return loadLibrary().then(function (lib) {
-      var added = 0;
-      incomingLists.forEach(function (rawList) {
+    var added = 0;
+    var lockIds = [];
+    incomingLists.forEach(function (rawList) {
         if (!rawList || typeof rawList !== "object" || Array.isArray(rawList)) return;
         var dest = null;
         if (typeof rawList.id === "string" && rawList.id) dest = findList(lib, rawList.id);
@@ -533,11 +534,22 @@ var QueueStorage = (function () {
           if (typeof rawList.id === "string" && rawList.id) dest.id = rawList.id;
           lib.lists.push(dest);
         }
-        if (rawList.locked) dest.locked = true;
+        if (rawList.locked) {
+          dest.locked = true;
+          lockIds.push(dest.id);
+        }
         added += mergeIntoList(dest, Array.isArray(rawList.items) ? rawList.items : []);
       });
       return writeLibrary(lib).then(function () {
-        return { added: added, total: flattenItems(lib).length };
+        var chain = Promise.resolve();
+        lockIds.forEach(function (id) {
+          var list = findList(lib, id);
+          if (!list || !list.locked) return;
+          chain = chain.then(function () { return revokeList(id); });
+        });
+        return chain.then(function () {
+          return { added: added, total: flattenItems(lib).length };
+        });
       });
     });
   }
@@ -612,8 +624,11 @@ var QueueStorage = (function () {
     return loadLibrary().then(function (lib) {
       var list = findList(lib, listId);
       if (!list) return Promise.reject(new Error("unknown list"));
-      list.items = [];
-      return writeLibrary(lib).then(function () { return list; });
+      return getGrants().then(function (grants) {
+        if (!listAccessGranted(list, grants)) return Promise.reject(new Error("locked"));
+        list.items = [];
+        return writeLibrary(lib).then(function () { return list; });
+      });
     });
   }
 
