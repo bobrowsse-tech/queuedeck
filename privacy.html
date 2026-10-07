@@ -58,12 +58,12 @@
   <main>
     <p class="brand">QueueDeck</p>
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated: September 23, 2026</p>
+    <p class="updated">Last updated: October 7, 2026</p>
 
     <p>
-      QueueDeck is a Chrome extension that saves video links to a personal
-      watch-later list. This policy explains what the extension does — and
-      does not — do with your data.
+      QueueDeck is a Chrome extension that saves video links into named lists
+      on this device. This policy explains what the extension does — and does
+      not — do with your data.
     </p>
 
     <h2>Summary</h2>
@@ -83,12 +83,20 @@
       <li>Video URL, title, thumbnail URL, and site name</li>
       <li>Optional notes you write</li>
       <li>Watched state and playback resume position</li>
-      <li>Settings such as prompt delay, theme, sort/filter preferences, and which list is open</li>
-      <li>List names, and whether a list is locked. The lock is checked on this device; the saved videos are not encrypted</li>
+      <li>Settings such as prompt delay, theme, and sort/filter preferences</li>
+      <li>Which list is open, and which list saves from a page go to</li>
+      <li>List names, and whether a list is locked</li>
     </ul>
     <p>
       This data is cleared only when you clear it in the Options page, clear
       site/extension data in Chrome, or uninstall the extension.
+    </p>
+    <p>
+      A list lock is a screen gate. QueueDeck stores only a credential id for
+      the check. It never stores a fingerprint, password, or PIN. The saved
+      videos are not encrypted. After you unlock a list, that permission lives
+      in <code>chrome.storage.session</code> and ends when the browser session
+      ends. Saving into a locked list still works.
     </p>
 
     <h2>What we do not collect</h2>

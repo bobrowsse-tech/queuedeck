@@ -123,6 +123,10 @@ Import accepts that version-2 file (match an existing list by id, then by
 name, otherwise create it; de-dupe inside the list; new item ids) and a
 bare `QueueItem[]`, which merges into the save-target list. Anything else
 is rejected. A locked list without a session grant is not imported into.
+Importing a list marked locked revokes that list's session grant, so a
+grant from earlier in this browser session does not keep the restored list
+open. The locked flag still does not stick when this device has no
+credential id.
 
 ## Unlock grants
 

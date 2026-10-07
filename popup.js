@@ -47,14 +47,18 @@
 
   clearBtn.addEventListener("click", function () {
     QueueStorage.getSettings().then(function (settings) {
-      return QueueStorage.getListItems(settings.activeListId).then(function (items) {
+      var listId = settings.activeListId;
+      return QueueStorage.getListItems(listId).then(function (items) {
         if (items.length === 0) return;
         var name = listSelect.options[listSelect.selectedIndex]
           ? listSelect.options[listSelect.selectedIndex].textContent
           : "this list";
-        if (confirm("Remove all " + items.length + " saved videos from " + name + "? This can't be undone.")) {
-          QueueStorage.clearList(settings.activeListId).then(render);
-        }
+        if (!confirm("Remove all " + items.length + " saved videos from " + name + "? This can't be undone.")) return;
+        return Promise.all([QueueStorage.getLists(), QueueStorage.getGrants()]).then(function (res) {
+          var open = res[0].filter(function (list) { return list.id === listId; })[0];
+          if (!open || !QueueStorage.listAccessGranted(open, res[1])) return;
+          return QueueStorage.clearList(listId).then(render);
+        });
       });
     });
   });

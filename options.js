@@ -418,13 +418,30 @@
         return;
       }
       if (!confirm("Remove " + count + " videos from unlocked lists? Locked lists stay. This can't be undone.")) return;
-      var chain = Promise.resolve();
-      openLists.forEach(function (list) {
-        chain = chain.then(function () { return QueueStorage.clearList(list.id); });
-      });
-      return chain.then(function () {
-        showStatus("Cleared unlocked lists.");
-        load();
+      var ids = [];
+      openLists.forEach(function (list) { ids.push(list.id); });
+      return Promise.all([QueueStorage.getLists(), QueueStorage.getGrants()]).then(function (fresh) {
+        var freshLists = fresh[0];
+        var freshGrants = fresh[1];
+        var chain = Promise.resolve();
+        var cleared = 0;
+        ids.forEach(function (id) {
+          var list = null;
+          freshLists.forEach(function (candidate) {
+            if (candidate.id === id) list = candidate;
+          });
+          if (!list || !QueueStorage.listAccessGranted(list, freshGrants)) return;
+          cleared += 1;
+          chain = chain.then(function () { return QueueStorage.clearList(id); });
+        });
+        if (!cleared) {
+          showStatus("Nothing unlocked to clear.");
+          return;
+        }
+        return chain.then(function () {
+          showStatus("Cleared unlocked lists.");
+          load();
+        });
       });
     });
   });
