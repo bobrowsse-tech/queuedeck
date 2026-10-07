@@ -16,6 +16,11 @@
 - [x] Workflow `.github/workflows/publish-chrome.yml` (manual + `v*` tags)
 - [x] Publish 1.1.5 (named lists, per-list lock, manual reorder) with tag `v1.1.5`
 
+## v1.1.7 — resume prompt
+
+- [x] The save prompt stays hidden when a saved video is playing and the
+      address only adds a resume start time
+
 ## v1.1.6 — confirm, copy, and the settings switch
 
 - [x] Confirm dialogs no longer clear a list that locks or disappears
