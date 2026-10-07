@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "QueueDeck",
   "short_name": "QueueDeck",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Save any video to watch later. 100% local storage, zero accounts, zero tracking, fully open source.",
   "permissions": ["storage", "activeTab"],
   "commands": {

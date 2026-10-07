@@ -11,10 +11,16 @@
 
 ## Next — GitHub → Chrome Web Store publish
 
-- [ ] Add `CWS_EXTENSION_ID`, `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`,
+- [x] Add `CWS_EXTENSION_ID`, `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`,
       `CWS_REFRESH_TOKEN` repository secrets (see `docs/store-listing.md`)
 - [x] Workflow `.github/workflows/publish-chrome.yml` (manual + `v*` tags)
-- [ ] Publish 1.1.5 (named lists, per-list lock, manual reorder) with tag `v1.1.5`
+- [x] Publish 1.1.5 (named lists, per-list lock, manual reorder) with tag `v1.1.5`
+
+## v1.1.6 — confirm, copy, and the settings switch
+
+- [x] Confirm dialogs no longer clear a list that locks or disappears
+- [x] Privacy policy and store listing describe named lists
+- [x] Settings switch thumb is centered
 
 ## v1.1.2 — title capture
 
