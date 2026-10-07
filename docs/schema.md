@@ -66,8 +66,10 @@ duplicate — *unless* the incoming `position` is further along than what's
 stored, in which case the resume point is updated in place (see Resume
 position below). Normalization currently strips: `si`, `utm_source`,
 `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `feature`,
-`fbclid`, `gclid`, `igshid`, `spm`. Add new params to `STRIP_PARAMS` in
-`storage.js` if a new tracking convention turns up false negatives.
+`fbclid`, `gclid`, `igshid`, `spm`, plus seek params `t`, `start`, and
+`time_continue`, and a hash that is only `#t=`. A resume link is the same
+video. Add new params to `STRIP_PARAMS` in `storage.js` if a new tracking
+convention turns up false negatives.
 
 **Resume position:** `content.js` calls
 `QueueStorage.updatePositionByUrl(url, currentTime, duration)` roughly

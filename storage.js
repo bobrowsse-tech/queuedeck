@@ -66,17 +66,19 @@ var QueueStorage = (function () {
     return trimmed;
   }
 
-  // Strip common tracking params so the same video saved twice from
-  // different links (e.g. with a share ?si= token) is recognized as one item.
+  // Strip tracking params and playback start times so the same video saved
+  // twice — including a resume link with ?t= or #t= — is recognized as one item.
   var STRIP_PARAMS = [
     "si", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-    "feature", "fbclid", "gclid", "igshid", "spm"
+    "feature", "fbclid", "gclid", "igshid", "spm",
+    "t", "start", "time_continue"
   ];
 
   function normalizeUrl(rawUrl) {
     try {
       var u = new URL(rawUrl);
       STRIP_PARAMS.forEach(function (p) { u.searchParams.delete(p); });
+      if (/^t=/i.test(u.hash.slice(1))) u.hash = "";
       return u.toString();
     } catch (e) {
       return rawUrl;
@@ -193,7 +195,7 @@ var QueueStorage = (function () {
     var item = {
       id: raw.id || generateId(),
       url: raw.url || "",
-      normalizedUrl: raw.normalizedUrl || normalizeUrl(raw.url || ""),
+      normalizedUrl: normalizeUrl(raw.url || raw.normalizedUrl || ""),
       title: (raw.title || raw.url || "Untitled").trim(),
       siteName: raw.siteName || "",
       thumbnail: raw.thumbnail || "",

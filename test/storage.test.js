@@ -31,13 +31,55 @@ function loadQueueStorage() {
   return { QueueStorage: sandbox.QueueStorage, mock: mock };
 }
 
-test("normalizeUrl strips tracking params", function () {
+test("normalizeUrl strips tracking params and playback start times", function () {
   var { QueueStorage, mock } = loadQueueStorage();
   mock.clear();
   var cleaned = QueueStorage.normalizeUrl(
-    "https://www.youtube.com/watch?v=abc123&si=sharetoken&utm_source=twitter"
+    "https://www.youtube.com/watch?v=abc123&si=sharetoken&utm_source=twitter&t=90s"
   );
   assert.equal(cleaned, "https://www.youtube.com/watch?v=abc123");
+  var vimeo = QueueStorage.normalizeUrl("https://vimeo.com/123456#t=30s");
+  assert.equal(vimeo, "https://vimeo.com/123456");
+  var kept = QueueStorage.normalizeUrl("https://vimeo.com/123456#chapter");
+  assert.equal(kept, "https://vimeo.com/123456#chapter");
+});
+
+test("hasUrl treats a resume timestamp as the saved video", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  await QueueStorage.addItem({
+    url: "https://www.youtube.com/watch?v=abc123",
+    title: "Saved"
+  });
+  await QueueStorage.addItem({
+    url: "https://vimeo.com/123456",
+    title: "Clip"
+  });
+
+  assert.equal(
+    await QueueStorage.hasUrl("https://www.youtube.com/watch?v=abc123&t=90s"),
+    true
+  );
+  assert.equal(await QueueStorage.hasUrl("https://vimeo.com/123456#t=30s"), true);
+});
+
+test("addItem does not duplicate a video that only adds a start time", async function () {
+  var { QueueStorage, mock } = loadQueueStorage();
+  mock.clear();
+  var first = await QueueStorage.addItem({
+    url: "https://www.youtube.com/watch?v=abc123&t=30s",
+    title: "Early"
+  });
+  var second = await QueueStorage.addItem({
+    url: "https://www.youtube.com/watch?v=abc123&t=90s",
+    title: "Later"
+  });
+  assert.equal(first.alreadyExisted, false);
+  assert.equal(second.alreadyExisted, true);
+  assert.equal(first.item.id, second.item.id);
+  var items = await QueueStorage.getItems();
+  assert.equal(items.length, 1);
+  assert.equal(items[0].normalizedUrl, "https://www.youtube.com/watch?v=abc123");
 });
 
 test("addItem de-duplicates by normalized URL", async function () {
